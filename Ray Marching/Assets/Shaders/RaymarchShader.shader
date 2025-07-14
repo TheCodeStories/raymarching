@@ -21,6 +21,8 @@ Shader "Hidden/RaymarchShader"
             sampler2D _MainTex;
             // uniform float4 _CamWorldSpace;
             uniform float4x4 _CamFrustum, _CamToWorld;
+            uniform float _MaxDistance;
+            uniform float4 _Sphere;
 
             struct appdata
             {
@@ -52,12 +54,49 @@ Shader "Hidden/RaymarchShader"
                 return o;
             }
 
+            float SDSphere(float3 position, float radius)
+            {
+                return length(position) - radius;
+            }
+
+            float SDF(float3 position)
+            {
+                float sphere = SDSphere(position - _Sphere.xyz, _Sphere.w);
+
+                return sphere;
+            }
+
+            fixed4 raymarching(float3 origin, float3 direction)
+            {
+                fixed4 result = fixed4(1,1,1,1);
+                const int maxSteps = 64;
+                float traveled = 0;
+
+
+                for(int i = 0; i < maxSteps; i++){
+                    if(traveled > _MaxDistance){
+                        result = fixed4(direction, 1);
+                        break;
+                    }
+
+                    float3 position = origin + direction * traveled;
+                    float distance = SDF(position);
+
+                    if(distance < 0.01) //We hit something
+                        break;
+
+                    traveled += distance;
+                }
+                
+                return result;
+            }
+
             fixed4 frag (v2f i) : SV_Target
             {
                 float3 rayDirection = normalize(i.ray.xyz);
                 float3 rayOrigin = _WorldSpaceCameraPos;
-
-                return fixed4(rayDirection, 1);
+                fixed4 result = raymarching(rayOrigin, rayDirection);
+                return result;
             }
             ENDCG
         }
