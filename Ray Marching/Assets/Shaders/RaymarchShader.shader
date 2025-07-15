@@ -23,6 +23,7 @@ Shader "Hidden/RaymarchShader"
             uniform float4x4 _CamFrustum, _CamToWorld;
             uniform float _MaxDistance;
             uniform float4 _Sphere;
+            uniform float3 _LightDirection;
 
             struct appdata
             {
@@ -66,10 +67,19 @@ Shader "Hidden/RaymarchShader"
                 return sphere;
             }
 
-            fixed4 raymarching(float3 origin, float3 direction)
-            {
+            float3 getNormal(float3 position){
+                const float2 offset = float2(0.001, 0.0);
+                float3 n = float3(
+                    SDF(position + offset.xyy) - SDF(position - offset.xyy),
+                    SDF(position + offset.yxy) - SDF(position - offset.yxy),
+                    SDF(position + offset.yyx) - SDF(position - offset.yyx)
+                );
+                return normalize(n);
+            }
+
+            fixed4 raymarching(float3 origin, float3 direction){
                 fixed4 result = fixed4(1,1,1,1);
-                const int maxSteps = 64;
+                const int maxSteps = 128;
                 float traveled = 0;
 
 
@@ -82,8 +92,13 @@ Shader "Hidden/RaymarchShader"
                     float3 position = origin + direction * traveled;
                     float distance = SDF(position);
 
-                    if(distance < 0.01) //We hit something
-                        break;
+                    if(distance < 0.01){ //We hit something
+                        float3 normal = getNormal(position);
+
+                        float light = dot(-_LightDirection, normal);
+
+                        result = fixed4(light, light, light, 1);
+                    }
 
                     traveled += distance;
                 }

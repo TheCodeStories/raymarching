@@ -35,6 +35,9 @@ public class RaymarchCamera : MonoBehaviour
         }
     }
 
+    public Transform _directionalLight;
+
+
     private Camera _cam;
 
     public float _maxDistance;
@@ -52,6 +55,7 @@ public class RaymarchCamera : MonoBehaviour
         _raymarchMaterial.SetMatrix("_CamToWorld", _camera.cameraToWorldMatrix);
         _raymarchMaterial.SetFloat("_MaxDistance", _maxDistance);
         _raymarchMaterial.SetVector("_Sphere", _sphere);
+        _raymarchMaterial.SetVector("_LightDirection", _directionalLight ? _directionalLight.forward : Vector3.down);
 
 
         RenderTexture.active = destination;
