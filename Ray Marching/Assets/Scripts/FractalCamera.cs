@@ -4,7 +4,7 @@ using UnityEngine;
 
 [RequireComponent(typeof(Camera))]
 [ExecuteInEditMode]
-public class RaymarchCamera : MonoBehaviour
+public class FractalCamera : MonoBehaviour
 {
     [SerializeField]
     private Shader _shader;
@@ -41,14 +41,12 @@ public class RaymarchCamera : MonoBehaviour
     private Camera _cam;
 
     public float _maxDistance;
-    public Vector4 _sphere;
-    public Color _sphereColor;
-
-    public Vector4 _box;
-    public Color _boxColor;
-
-    public float _smoothFactor;
-    public float _blendFactor;
+    public float _power;
+    public float _darkness;
+    public float _blackAndWhite;
+    public Vector3 _colourAMix;
+    public Vector3 _colourBMix;
+    public int _iterations;
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
@@ -61,13 +59,15 @@ public class RaymarchCamera : MonoBehaviour
         _raymarchMaterial.SetMatrix("_CamFrustum", CamFrustum(_camera));
         _raymarchMaterial.SetMatrix("_CamToWorld", _camera.cameraToWorldMatrix);
         _raymarchMaterial.SetFloat("_MaxDistance", _maxDistance);
-        _raymarchMaterial.SetVector("_Sphere", _sphere);
-        _raymarchMaterial.SetColor("_SphereColor", _sphereColor);
-        _raymarchMaterial.SetVector("_Box", _box);
-        _raymarchMaterial.SetColor("_BoxColor", _boxColor);
-        _raymarchMaterial.SetFloat("_SmoothFactor", _smoothFactor);
-        _raymarchMaterial.SetFloat("_BlendFactor", _blendFactor);
         _raymarchMaterial.SetVector("_LightDirection", _directionalLight ? _directionalLight.forward : Vector3.down);
+
+        _raymarchMaterial.SetFloat("_Power", _power);
+        _raymarchMaterial.SetFloat("_Darkness", _darkness);
+        _raymarchMaterial.SetFloat("_BlackAndWhite", _blackAndWhite);
+        _raymarchMaterial.SetVector("_ColourAMix", _colourAMix);
+        _raymarchMaterial.SetVector("_ColourBMix", _colourBMix);
+        _raymarchMaterial.SetInt("_Iterations", _iterations);
+
 
 
         RenderTexture.active = destination;

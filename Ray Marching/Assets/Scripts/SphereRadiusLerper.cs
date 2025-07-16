@@ -1,48 +1,70 @@
 using UnityEngine;
-using UnityEngine.InputSystem; // Required for the new Input System
+using UnityEngine.InputSystem;
 
 public class SphereRadiusLerper : MonoBehaviour
 {
-    public RaymarchCamera raymarchCam;
+    public FractalCamera fractalCam;
 
-    public float targetRadius = 1.0f;
+    public float[] targetRadii = { 1.0f, 0.5f, 2.0f }; // Add more steps as needed
     public float lerpSpeed = 1.0f;
     public Key triggerKey = Key.R;
 
     private bool isLerping = false;
     private float initialRadius;
     private float t;
+    private int currentStep = 0;
 
     void Update()
     {
-        if (raymarchCam == null)
+        if (fractalCam == null)
         {
-            Debug.LogWarning("RaymarchCamera reference not assigned.");
+            Debug.LogWarning("FractalCamera reference not assigned.");
             return;
         }
 
         if (Keyboard.current[triggerKey].wasPressedThisFrame)
         {
-            initialRadius = raymarchCam._sphere.w;
-            t = 0f;
-            isLerping = true;
+            if (targetRadii.Length == 0)
+            {
+                Debug.LogWarning("No target radii defined.");
+                return;
+            }
+
+            currentStep = 0;
+            StartLerp();
         }
 
         if (isLerping)
         {
             t += Time.deltaTime * lerpSpeed;
             float easedT = EaseInOut(t);
+            // float easedT = t;
 
-            float newRadius = Mathf.Lerp(initialRadius, targetRadius, easedT);
-            Vector4 sphere = raymarchCam._sphere;
-            sphere.w = newRadius;
-            raymarchCam._sphere = sphere;
+            float newRadius = Mathf.Lerp(initialRadius, targetRadii[currentStep], easedT);
+            float boxX = fractalCam._power;
+            boxX = newRadius;
+            fractalCam._power = boxX;
 
             if (t >= 1f)
             {
-                isLerping = false;
+                currentStep++;
+                if (currentStep < targetRadii.Length)
+                {
+                    StartLerp();
+                }
+                else
+                {
+                    isLerping = false;
+                }
             }
         }
+    }
+
+    void StartLerp()
+    {
+        initialRadius = fractalCam._power;
+        t = 0f;
+        isLerping = true;
     }
 
     float EaseInOut(float x)
