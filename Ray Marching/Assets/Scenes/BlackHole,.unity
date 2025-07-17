@@ -253,7 +253,7 @@ Transform:
   m_GameObject: {fileID: 771128633}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.39, z: -11.39}
+  m_LocalPosition: {x: 0, y: 0.28, z: -34.32}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -276,14 +276,13 @@ MonoBehaviour:
   _maxDistance: 1000
   _maxIterations: 1000
   _accuracy: 0.001
-  _stepSize: 0.021
-  _sphere: {x: 0, y: 0, z: 0, w: 0.2}
+  _stepSize: 0.05
+  _sphere: {x: 0, y: 0, z: 0, w: 0.7}
   _sphereColor: {r: 0, g: 0, b: 0, a: 0}
   _torus: {x: 15, y: 10, z: 100}
   _torusColor: {r: 0.9433962, g: 0.3499019, b: 0.084549636, a: 0}
-  _blackHoleMass: 0.1
+  _blackHoleMass: 0.4
   _skyboxCubemap: {fileID: 8900000, guid: ab36b913f25e9c0429d2a3902cc7553c, type: 3}
-  _schwarzschildRadius: 1
 --- !u!114 &771128641
 MonoBehaviour:
   m_ObjectHideFlags: 0

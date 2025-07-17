@@ -109,39 +109,91 @@ Shader "Hidden/BlackholeShader"
                 return normalize(n);
             }
 
+            void RK4Step(inout float3 position, inout float3 direction, float dt)
+            {
+                float3 blackHoleCenter = _Sphere.xyz;
 
-            fixed4 raymarching(float3 origin, float3 direction){
+                // k1
+                float3 r1 = blackHoleCenter - position;
+                float dist1 = length(r1);
+                float3 force1 = normalize(r1) * (_BlackHoleMass / (dist1 * dist1 + 0.001));
+                float3 k1_p = direction;
+                float3 k1_v = force1;
+
+                // k2
+                float3 p2 = position + 0.5 * dt * k1_p;
+                float3 v2 = direction + 0.5 * dt * k1_v;
+                float3 r2 = blackHoleCenter - p2;
+                float dist2 = length(r2);
+                float3 force2 = normalize(r2) * (_BlackHoleMass / (dist2 * dist2 + 0.001));
+                float3 k2_p = v2;
+                float3 k2_v = force2;
+
+                // k3
+                float3 p3 = position + 0.5 * dt * k2_p;
+                float3 v3 = direction + 0.5 * dt * k2_v;
+                float3 r3 = blackHoleCenter - p3;
+                float dist3 = length(r3);
+                float3 force3 = normalize(r3) * (_BlackHoleMass / (dist3 * dist3 + 0.001));
+                float3 k3_p = v3;
+                float3 k3_v = force3;
+
+                // k4
+                float3 p4 = position + dt * k3_p;
+                float3 v4 = direction + dt * k3_v;
+                float3 r4 = blackHoleCenter - p4;
+                float dist4 = length(r4);
+                float3 force4 = normalize(r4) * (_BlackHoleMass / (dist4 * dist4 + 0.001));
+                float3 k4_p = v4;
+                float3 k4_v = force4;
+
+                // Combine
+                position += (dt / 6.0) * (k1_p + 2.0 * k2_p + 2.0 * k3_p + k4_p);
+                direction += (dt / 6.0) * (k1_v + 2.0 * k2_v + 2.0 * k3_v + k4_v);
+                direction = normalize(direction);
+            }
+
+
+            // =======================
+            // Raymarching loop with RK4
+            // =======================
+
+            fixed4 raymarching(float3 origin, float3 direction)
+            {
                 const int maxSteps = _MaxIterations;
                 const float stepSize = _StepSize;
-                float traveled = 0;
-                float3 startDirection = direction;
+
+                float3 position = origin;
 
                 for (int i = 0; i < maxSteps; i++) {
-                    float3 position = origin + direction * traveled;
-                    float3 toBH = _Sphere.xyz - position;
-                    float distanceToCenter = length(toBH);
-                    float gravityStrength = _BlackHoleMass / (distanceToCenter * distanceToCenter + 0.01);
 
-                    float3 gravityDir = normalize(toBH);
+                    // Take one RK4 step:
+                    RK4Step(position, direction, stepSize);
 
-                    float gravitationalLensing = gravityStrength * stepSize;
-
-                    direction = normalize(lerp(direction, gravityDir, gravitationalLensing));
-
+                    // Check hit:
                     float4 distance = sdf(position);
                     if (distance.w < _Accuracy) {
-                        return fixed4(distance.rgb, 1.0); // Hit something
+                        return fixed4(distance.rgb, 1.0);
                     }
 
-                    traveled += stepSize;
-                    if (traveled > _MaxDistance) {
+                    // Check if swallowed by black hole:
+                    float distToCenter = length(position - _Sphere.xyz);
+                    float schwarzschildRadius = _Sphere.w; // you can define this however you like
+                    if (distToCenter < schwarzschildRadius) {
+                        return fixed4(0, 0, 0, 1);
+                    }
+
+                    // Optional: kill ray if very far
+                    if (length(position - origin) > _MaxDistance) {
                         break;
                     }
                 }
 
-                // After ray is bent, sample skybox with final direction
+                // Missed all → sample skybox in final bent direction
                 return fixed4(texCUBE(_CubeMap, direction).rgb, 0.0);
             }
+
+
             fixed4 frag (v2f i) : SV_Target
             {
                 fixed3 color = tex2D(_MainTex, i.uv);
@@ -157,3 +209,167 @@ Shader "Hidden/BlackholeShader"
         }
     }
 }
+
+
+
+
+// Shader "Hidden/BlackholeShader"
+// {
+//     Properties
+//     {
+//         _MainTex ("Texture", 2D) = "white" {}
+//         _CubeMap ("Skybox", CUBE) = "" {}
+//     }
+//     SubShader
+//     {
+//         // No culling or depth
+//         Cull Off ZWrite Off ZTest Always
+
+//         Pass
+//         {
+//             CGPROGRAM
+//             #pragma vertex vert
+//             #pragma fragment frag
+//             #pragma target 3.0
+
+//             #include "UnityCG.cginc"
+//             #include "DistanceFunctions.cginc"
+
+//             sampler2D _MainTex;
+//             samplerCUBE _CubeMap;
+//             uniform sampler2D _CameraDepthTexture;
+//             uniform float4x4 _CamFrustum, _CamToWorld;
+//             uniform float _MaxDistance;
+//             uniform float4 _Sphere;
+//             uniform float4 _SphereColor;
+//             uniform int _MaxIterations;
+//             uniform float _Accuracy;
+//             uniform float _StepSize;
+
+//             //Black Hole parameters
+//             uniform float _BlackHoleMass;
+//             uniform float3 _Torus;
+//             uniform float3 _TorusColor;
+
+
+//             struct appdata
+//             {
+//                 float4 vertex : POSITION;
+//                 float2 uv : TEXCOORD0;
+//             };
+
+//             struct v2f
+//             {
+//                 float2 uv : TEXCOORD0;
+//                 float4 vertex : SV_POSITION;
+//                 float3 ray : TEXCOORD1;
+//             };
+
+//             v2f vert (appdata v)
+//             {
+//                 v2f o;
+//                 half index = v.vertex.z;
+//                 v.vertex.z = 0;
+//                 o.vertex = UnityObjectToClipPos(v.vertex);
+//                 o.uv = v.uv;
+
+//                 o.ray = _CamFrustum[(int)index].xyz;
+
+//                 o.ray /= abs(o.ray.z);
+
+//                 o.ray = mul(_CamToWorld, o.ray);
+
+//                 return o;
+//             }
+
+
+//             float4 smoothMin(float4 a, float4 b, float smoothFactor)
+//             {
+//                 if (smoothFactor < 0.1)
+//                 {
+//                     return (a.a < b.a) ? a : b;
+//                 }
+
+//                 float da = a.a;
+//                 float db = b.a;
+
+//                 float wa = exp2(-da / smoothFactor);
+//                 float wb = exp2(-db / smoothFactor);
+//                 float wSum = wa + wb;
+
+//                 float d = -smoothFactor * log2(wSum);
+//                 float3 color = (a.rgb * wa + b.rgb * wb) / wSum;
+
+//                 return float4(color, d);
+//             }
+
+//             float4 sdf(float3 position)
+//             {
+//                 float4 sphere = float4(_SphereColor.rgb, sdSphere(position - _Sphere.xyz, _Sphere.w));
+//                 float4 torus = float4(_TorusColor, sdTorusFlattened(position, _Torus) );
+
+//                 // return torus;
+//                 return smoothMin(sphere, torus, 0.0);
+//                 // return sphere;
+//             }
+
+
+//             float3 getNormal(float3 position){
+//                 const float2 offset = float2(0.001, 0.0);
+//                 float3 n = float3(
+//                     sdf(position + offset.xyy).w - sdf(position - offset.xyy).w,
+//                     sdf(position + offset.yxy).w - sdf(position - offset.yxy).w,
+//                     sdf(position + offset.yyx).w - sdf(position - offset.yyx).w
+//                 );
+//                 return normalize(n);
+//             }
+
+
+//             fixed4 raymarching(float3 origin, float3 direction){
+//                 const int maxSteps = _MaxIterations;
+//                 const float stepSize = _StepSize;
+//                 float traveled = 0;
+//                 float3 startDirection = direction;
+
+//                 for (int i = 0; i < maxSteps; i++) {
+//                     float3 position = origin + direction * traveled;
+                    
+//                     float3 toBH = _Sphere.xyz - position;
+//                     float distanceToCenter = length(toBH);
+//                     float gravityStrength = _BlackHoleMass / (distanceToCenter * distanceToCenter + 0.01);
+
+//                     float3 gravityDir = normalize(toBH);
+
+//                     float gravitationalLensing = gravityStrength * stepSize;
+
+//                     direction = normalize(lerp(direction, gravityDir, gravitationalLensing));
+
+//                     float4 distance = sdf(position);
+//                     if (distance.w < _Accuracy) {
+//                         return fixed4(distance.rgb, 1.0); // Hit something
+//                     }
+
+//                     traveled += stepSize;
+//                     if (traveled > _MaxDistance) {
+//                         break;
+//                     }
+//                 }
+
+//                 // After ray is bent, sample skybox with final direction
+//                 return fixed4(texCUBE(_CubeMap, direction).rgb, 0.0);
+//             }
+//             fixed4 frag (v2f i) : SV_Target
+//             {
+//                 fixed3 color = tex2D(_MainTex, i.uv);
+//                 float3 rayDirection = normalize(i.ray.xyz);
+//                 float3 rayOrigin = _WorldSpaceCameraPos;
+//                 fixed4 result = raymarching(rayOrigin, rayDirection);
+
+//                 return fixed4(result.rgb, 1.0);
+
+//                 // return fixed4(color * (1.0 - result.w) + result.rgb * result.w, 1.0);
+//             }
+//             ENDCG
+//         }
+//     }
+// }
