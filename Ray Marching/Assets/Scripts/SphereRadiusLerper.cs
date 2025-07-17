@@ -3,7 +3,7 @@ using UnityEngine.InputSystem;
 
 public class SphereRadiusLerper : MonoBehaviour
 {
-    public FractalCamera fractalCam;
+    public RaymarchCamera fractalCam;
 
     public float[] targetRadii = { 1.0f, 0.5f, 2.0f }; // Add more steps as needed
     public float lerpSpeed = 1.0f;
@@ -18,7 +18,7 @@ public class SphereRadiusLerper : MonoBehaviour
     {
         if (fractalCam == null)
         {
-            Debug.LogWarning("FractalCamera reference not assigned.");
+            Debug.LogWarning("RaymarchCamera reference not assigned.");
             return;
         }
 
@@ -41,9 +41,9 @@ public class SphereRadiusLerper : MonoBehaviour
             // float easedT = t;
 
             float newRadius = Mathf.Lerp(initialRadius, targetRadii[currentStep], easedT);
-            float boxX = fractalCam._power;
+            float boxX = fractalCam._ground;
             boxX = newRadius;
-            fractalCam._power = boxX;
+            fractalCam._ground = boxX;
 
             if (t >= 1f)
             {
@@ -62,7 +62,7 @@ public class SphereRadiusLerper : MonoBehaviour
 
     void StartLerp()
     {
-        initialRadius = fractalCam._power;
+        initialRadius = fractalCam._ground;
         t = 0f;
         isLerping = true;
     }

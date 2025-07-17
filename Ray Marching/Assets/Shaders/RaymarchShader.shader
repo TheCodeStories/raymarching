@@ -20,16 +20,28 @@ Shader "Hidden/RaymarchShader"
             #include "DistanceFunctions.cginc"
 
             sampler2D _MainTex;
-            // uniform float4 _CamWorldSpace;
+            uniform sampler2D _CameraDepthTexture;
             uniform float4x4 _CamFrustum, _CamToWorld;
             uniform float _MaxDistance;
             uniform float4 _Sphere;
             uniform float4 _SphereColor;
             uniform float4 _Box;
             uniform float4 _BoxColor;
+            uniform float _Ground;
+            uniform float3 _GroundColor;
             uniform float _SmoothFactor;
             uniform float _BlendFactor;
             uniform float3 _LightDirection;
+            uniform float3 _LightColor;
+            uniform float _LightIntensity;
+            uniform float _ShadowIntensity;
+            uniform float _ShadowPenumbra;
+            uniform float2 _ShadowDistance;
+            uniform int _MaxIterations;
+            uniform float _Accuracy;
+            uniform float _AoStepSize;
+            uniform int _AoIterations;
+            uniform float _AoIntensity;
 
             struct appdata
             {
@@ -103,54 +115,9 @@ Shader "Hidden/RaymarchShader"
             float4 sdf(float3 position)
             {
                 float4 sphere = float4(_SphereColor.rgb, sDSphere(position - _Sphere.xyz, _Sphere.w));
-                float4 box = float4(_BoxColor.rgb, sDBox(position - _Box.xyz, _Box.w));
 
-                
-                return smoothMin(box, sphere, _SmoothFactor);
-                // return opUS(box, sphere, _SmoothFactor);
-                // return min(box.a, sphere.a);
+                return sphere;
             }
-
-            // float4 sdf(float3 position)
-            // {
-            //     float4 sphere      = float4(_SphereColor.rgb, sDSphere(position - _Sphere.xyz, _Sphere.w));
-            //     float4 box         = float4(_BoxColor.rgb,    sDBox(position - _Box.xyz,    _Box.w));
-            //     float angle = -3.14159 * 0.5; // -90 degrees in radians
-            //     float3 rotatedPos = rotateX(position - float3(0, 0, 0), angle); // center at (0,0,0)
-
-            //     float4 torus = float4(1.0, 1.0, 0.0, sdTorus(rotatedPos, float2(2.0, 1.0)));
-            //     // float4 torus       = float4(1.0, 1.0, 0.0,     sdTorus(position - float3(0, 0, 0), float2(1.0, 2.0)));
-            //     float4 hex         = float4(1.0, 0.0, 1.0,     sdHexPrism(position - float3(0, 0, 0), float2(1.0, 2.0)));
-            //     float4 octahedron  = float4(0.0, 1.0, 1.0,     sdOctahedron(position - float3(0, 0, 0), 2.0));
-
-            //     float t = _BlendFactor;
-                
-            //     if (t < 1.0)
-            //     {
-            //         return morphSDF(sphere, box, t);
-            //     }
-            //     else if (t < 2.0)
-            //     {
-            //         return morphSDF(box, torus, t - 1.0);
-            //     }
-            //     else if (t < 3.0)
-            //     {
-            //         return morphSDF(torus, hex, t - 2.0);
-            //     }
-            //     else if (t < 4.0)
-            //     {
-            //         return morphSDF(hex, octahedron, t - 3.0);
-            //     }
-            //     else
-            //     {
-            //         // Clamp at last shape
-            //         return octahedron;
-            //     }
-            // }
-
-
-
-
 
             float3 getNormal(float3 position){
                 const float2 offset = float2(0.001, 0.0);
@@ -162,27 +129,79 @@ Shader "Hidden/RaymarchShader"
                 return normalize(n);
             }
 
-            fixed4 raymarching(float3 origin, float3 direction){
+            float softShadow(float3 ro, float3 rd, float minTraveled, float maxTraveled, float k){
+                float result = 1.0;
+                for(float traveled = minTraveled; traveled < maxTraveled;){
+                    float h = sdf(ro + rd * traveled).w; // FIXED: Get distance
+                    if(h < 0.001){
+                        return 0.0;
+                    }
+                    result = min(result, k * h/traveled);
+                    traveled += h; // Also missing!
+                }
+                return clamp(result, 0.0, 1.0);
+            }
+
+            float ambientOclusion(float3 position, float3 normal)
+            {
+                float ao = 0.0;
+                float3 origin = position + normal * 0.01;
+
+                for (int i = 1; i <= _AoIterations; i++)
+                {
+                    float distance = _AoStepSize * i;
+                    float distToScene = sdf(origin + normal * distance).w;
+                    ao += max(0.0, distance - distToScene) / distance;
+                }
+
+                ao /= _AoIterations;
+                return pow(saturate(1.0 - ao), 1.5) * _AoIntensity;
+            }
+
+            float3 shading(float3 position, float3 normal, float3 color){
+                float3 result;
+                float3 light = (_LightColor * dot(-_LightDirection, normal) * 0.5 + 0.5) * _LightIntensity;
+            
+                float shadow = softShadow(
+                position, 
+                -_LightDirection,
+                _ShadowDistance.x, 
+                _ShadowDistance.y, 
+                _ShadowPenumbra
+                ) * 0.5 + 0.5;
+                shadow = max(0.0, pow(shadow, _ShadowIntensity));
+
+                float ao = ambientOclusion(position, normal);
+
+                result = color * light * shadow;
+
+                return result;
+                
+            }
+
+            fixed4 raymarching(float3 origin, float3 direction, float depth){
                 fixed4 result = fixed4(0.0,0.0,0.0,1);
-                const int maxSteps = 64;
+                const int maxSteps = _MaxIterations;
                 float traveled = 0;
 
-
-                for(int i = 0; i < maxSteps; i++){
-                    if(traveled > _MaxDistance){
-                        result = fixed4(direction, 1);
+                int i;
+                for(i = 0; i < maxSteps; i++){
+                    if(traveled > _MaxDistance || traveled >= depth){ 
+                        return fixed4(direction, 0);
                         break;
                     }
+                    
 
                     float3 position = origin + direction * traveled;
                     float4 distance = sdf(position);
 
-                    if(distance.w < 0.01){ //We hit something
+                    if(distance.w < _Accuracy){ //We hit something
                         float3 normal = getNormal(position);
 
-                        float light = dot(-_LightDirection, normal);
+                        float3 s = shading(position, normal, distance.rgb);
 
-                        result = fixed4(distance.rgb * light, 1);
+                        result = fixed4(distance.rgb * s, 1);
+                        break;
                     }
 
                     traveled += distance.w;
@@ -193,10 +212,14 @@ Shader "Hidden/RaymarchShader"
 
             fixed4 frag (v2f i) : SV_Target
             {
+                float depth = LinearEyeDepth(tex2D(_CameraDepthTexture, i.uv).r);
+                depth *= length(i.ray);
+                fixed3 color = tex2D(_MainTex, i.uv);
                 float3 rayDirection = normalize(i.ray.xyz);
                 float3 rayOrigin = _WorldSpaceCameraPos;
-                fixed4 result = raymarching(rayOrigin, rayDirection);
-                return result;
+                fixed4 result = raymarching(rayOrigin, rayDirection, depth);
+                
+                return fixed4(color * (1.0 - result.w) + result.rgb * result.w,1.0);
             }
             ENDCG
         }
