@@ -92,26 +92,6 @@ Shader "Hidden/RaymarchShader"
                 return float4(color, distance);
             }
 
-            float4 smoothMin(float4 a, float4 b, float smoothFactor)
-            {
-                if (smoothFactor < 0.1)
-                {
-                    return (a.a < b.a) ? a : b;
-                }
-
-                float da = a.a;
-                float db = b.a;
-
-                float wa = exp2(-da / smoothFactor);
-                float wb = exp2(-db / smoothFactor);
-                float wSum = wa + wb;
-
-                float d = -smoothFactor * log2(wSum);
-                float3 color = (a.rgb * wa + b.rgb * wb) / wSum;
-
-                return float4(color, d);
-            }
-
             float4 sdf(float3 position)
             {
                 float4 sphere = float4(_SphereColor.rgb, sDSphere(position - _Sphere.xyz, _Sphere.w));
