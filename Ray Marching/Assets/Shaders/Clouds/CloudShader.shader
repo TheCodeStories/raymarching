@@ -17,7 +17,7 @@ Shader "Hidden/CloudShader"
             #pragma target 3.0
 
             #include "UnityCG.cginc"
-            #include "DistanceFunctions.cginc"
+            #include "../DistanceFunctions.cginc"
 
             sampler2D _MainTex;
             uniform sampler2D _CameraDepthTexture;

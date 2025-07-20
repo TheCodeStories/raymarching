@@ -51,14 +51,37 @@ public class BlackholeCamera : MonoBehaviour
     [Header("Objects")]
     public Vector4 _sphere;
     public Color _sphereColor;
-    public Vector3 _torus;
-    public Color _torusColor;
+    public Vector3 _cylinder;
+    public Color _cylinderColor;
 
 
     [Header("Black Hole")]
     public float _blackHoleMass;
     public Cubemap _skyboxCubemap;
+    public float _rotationSpeed;
 
+
+    [Header("Glow")]
+    public Color _mainGlowColor;
+    public float _mainGlowWidth;
+    public float _mainGlowSharpness;
+    public Color _outerGlowColor;
+    public float _outerGlowWidth;
+    public float _outerGlowSoftness;
+    [Range(0.0f,1.0f)]
+    public float _glowIntensity;
+    public float _glowLimit;
+    
+
+    /*
+        _mainGlowColor = 10, 5, 3
+        _mainGlowWidth = 1.0
+        _mainGlowSharpness = 32 
+        _outerGlowColor = 0,0,0
+        _outerGlowWidth = 0.4
+        _outerGlowSoftness = 2.0
+        _glowIntensity = 1.0
+    */
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
@@ -77,14 +100,23 @@ public class BlackholeCamera : MonoBehaviour
 
         _raymarchMaterial.SetVector("_Sphere", _sphere);
         _raymarchMaterial.SetColor("_SphereColor", _sphereColor);
-        _raymarchMaterial.SetVector("_Torus", _torus);
-        _raymarchMaterial.SetColor("_TorusColor", _torusColor);
+        _raymarchMaterial.SetVector("_Cylinder", _cylinder);
+        _raymarchMaterial.SetColor("_CylinderColor", _cylinderColor);
         _raymarchMaterial.SetFloat("_StepSize", _stepSize);
         _raymarchMaterial.SetFloat("_BlackHoleMass", _blackHoleMass);
         _raymarchMaterial.SetTexture("_CubeMap", _skyboxCubemap);
 
 
+        _raymarchMaterial.SetColor("_MainGlowColor", _mainGlowColor);
+        _raymarchMaterial.SetFloat("_MainGlowWidth", _mainGlowWidth);
+        _raymarchMaterial.SetFloat("_MainGlowSharpness", _mainGlowSharpness);
+        _raymarchMaterial.SetColor("_OuterGlowColor", _outerGlowColor);
+        _raymarchMaterial.SetFloat("_OuterGlowWidth", _outerGlowWidth);
+        _raymarchMaterial.SetFloat("_OuterGlowSoftness", _outerGlowSoftness);
+        _raymarchMaterial.SetFloat("_GlowIntensity", _glowIntensity);
 
+        _raymarchMaterial.SetFloat("_GlowLimit", _glowLimit);
+        _raymarchMaterial.SetFloat("_RotationSpeed", _rotationSpeed);
 
 
         RenderTexture.active = destination;

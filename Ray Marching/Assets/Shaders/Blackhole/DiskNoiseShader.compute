@@ -1,0 +1,38 @@
+#pragma kernel CSMain
+
+RWTexture2D<float4> _DiskNoise;
+float2 _Resolution;
+
+float frac(float x) {
+    return x - floor(x);
+}
+
+float hash(float3 p) {
+    p = frac(p * 0.3183099 + 0.1);
+    p *= 17.0;
+    return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Resolution.x || id.y >= _Resolution.y) return;
+
+    float2 uv = id.xy / _Resolution;
+
+    // Disk coordinates
+    float2 local = uv - 0.5;
+    float radius = length(local);
+    float angle = atan2(local.y, local.x);
+
+    // Match SDF domain:
+    float3 p;
+    p.x = radius * 10.0; // matches `c *= 10`
+    p.y = 0.0; // your SDF uses -position.y
+    p.z = angle * 0.5;
+
+    float value = hash(p);
+    value += hash(p * 2.5) * 0.5;
+
+    _DiskNoise[id.xy] = float4(value, value, value, 1.0);
+}
