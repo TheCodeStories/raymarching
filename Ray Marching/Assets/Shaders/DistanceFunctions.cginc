@@ -72,24 +72,44 @@ float sdOctahedron( float3 p, float s )
   return length(float3(q.x,q.y-s+k,q.z-k)); 
 }
 
-float sdHollowCylinder( float3 p, float3 cylinder )
+// float sdHollowCylinder( float3 p, float3 cylinder )
+// {
+//     float r1 = cylinder.x; // inner radius
+//     float r2 = cylinder.y; // outer radius
+//     float h  = cylinder.z; // height
+
+//     float2 d;
+//     float radialDist = length(p.xz);
+//     float distOuter = radialDist - r2;  // outside outer wall
+//     float distInner = r1 - radialDist;  // inside inner wall
+
+//     float distY = abs(p.y) - h * 0.5;   // top/bottom caps
+
+//     // Region between the cylinders and the caps
+//     float2 d2 = float2( max(distOuter, distInner), distY );
+
+//     return min( max(d2.x,d2.y), 0.0 ) + length( max(d2, 0.0) );
+// }
+float sdHollowCylinder(float3 p, float3 cylinder)
 {
     float r1 = cylinder.x; // inner radius
     float r2 = cylinder.y; // outer radius
-    float h  = cylinder.z; // height
+    float h  = cylinder.z; // base height (will increase toward inner wall)
 
-    float2 d;
     float radialDist = length(p.xz);
-    float distOuter = radialDist - r2;  // outside outer wall
-    float distInner = r1 - radialDist;  // inside inner wall
+    
+    // Height grows as we approach the inner wall
+    float t = saturate((r2 - radialDist) / (r2 - r1));
+    float dynamicHeight = h + t * 0.5;
 
-    float distY = abs(p.y) - h * 0.5;   // top/bottom caps
+    float distOuter = radialDist - r2;
+    float distInner = r1 - radialDist;
+    float distY = abs(p.y) - dynamicHeight * 0.5;
 
-    // Region between the cylinders and the caps
-    float2 d2 = float2( max(distOuter, distInner), distY );
-
-    return min( max(d2.x,d2.y), 0.0 ) + length( max(d2, 0.0) );
+    float2 d2 = float2(max(distOuter, distInner), distY);
+    return min(max(d2.x, d2.y), 0.0) + length(max(d2, 0.0));
 }
+
 // BOOLEAN OPERATORS //
 
 // Union

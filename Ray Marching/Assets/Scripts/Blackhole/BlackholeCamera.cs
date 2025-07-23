@@ -36,7 +36,6 @@ public class BlackholeCamera : MonoBehaviour
     }
 
     [Header("Components")]
-    public Transform _directionalLight;
     private Camera _cam;
 
     [Header("Raymarching Variables")]
@@ -65,38 +64,25 @@ public class BlackholeCamera : MonoBehaviour
     public Color _mainGlowColor;
     public float _mainGlowWidth;
     public float _mainGlowSharpness;
-    public Color _outerGlowColor;
-    public float _outerGlowWidth;
-    public float _outerGlowSoftness;
+    public float _falloff;
     [Range(0.0f,1.0f)]
     public float _glowIntensity;
     public float _glowLimit;
-    
 
-    /*
-        _mainGlowColor = 10, 5, 3
-        _mainGlowWidth = 1.0
-        _mainGlowSharpness = 32 
-        _outerGlowColor = 0,0,0
-        _outerGlowWidth = 0.4
-        _outerGlowSoftness = 2.0
-        _glowIntensity = 1.0
-    */
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
+        _camera.allowHDR = true;
         if (!_raymarchMaterial)
         {
             Graphics.Blit(source, destination);
             return;
         }
-
         _raymarchMaterial.SetMatrix("_CamFrustum", CamFrustum(_camera));
         _raymarchMaterial.SetMatrix("_CamToWorld", _camera.cameraToWorldMatrix);
         _raymarchMaterial.SetFloat("_MaxDistance", _maxDistance);
         _raymarchMaterial.SetInt("_MaxIterations", _maxIterations);
         _raymarchMaterial.SetFloat("_Accuracy", _accuracy);
-        _raymarchMaterial.SetVector("_LightDirection", _directionalLight ? _directionalLight.forward : Vector3.down);
 
         _raymarchMaterial.SetVector("_Sphere", _sphere);
         _raymarchMaterial.SetColor("_SphereColor", _sphereColor);
@@ -106,45 +92,16 @@ public class BlackholeCamera : MonoBehaviour
         _raymarchMaterial.SetFloat("_BlackHoleMass", _blackHoleMass);
         _raymarchMaterial.SetTexture("_CubeMap", _skyboxCubemap);
 
-
         _raymarchMaterial.SetColor("_MainGlowColor", _mainGlowColor);
         _raymarchMaterial.SetFloat("_MainGlowWidth", _mainGlowWidth);
         _raymarchMaterial.SetFloat("_MainGlowSharpness", _mainGlowSharpness);
-        _raymarchMaterial.SetColor("_OuterGlowColor", _outerGlowColor);
-        _raymarchMaterial.SetFloat("_OuterGlowWidth", _outerGlowWidth);
-        _raymarchMaterial.SetFloat("_OuterGlowSoftness", _outerGlowSoftness);
         _raymarchMaterial.SetFloat("_GlowIntensity", _glowIntensity);
-
+        _raymarchMaterial.SetFloat("_Falloff", _falloff);
         _raymarchMaterial.SetFloat("_GlowLimit", _glowLimit);
         _raymarchMaterial.SetFloat("_RotationSpeed", _rotationSpeed);
 
-
-        RenderTexture.active = destination;
-        _raymarchMaterial.SetTexture("_MainTex", source);
-        GL.PushMatrix();
-        GL.LoadOrtho();
-        _raymarchMaterial.SetPass(0);
-        GL.Begin(GL.QUADS);
-
-        //Bottom Left
-        GL.MultiTexCoord2(0, 0.0f, 0.0f);
-        GL.Vertex3(0.0f, 0.0f, 3.0f);
-
-        //Bottom Right
-        GL.MultiTexCoord2(0, 1.0f, 0.0f);
-        GL.Vertex3(1.0f, 0.0f, 2.0f);
-
-        //Top Right
-        GL.MultiTexCoord2(0, 1.0f, 1.0f);
-        GL.Vertex3(1.0f, 1.0f, 1.0f);
-
-        //Top Left
-        GL.MultiTexCoord2(0, 0.0f, 1.0f);
-        GL.Vertex3(0.0f, 1.0f, 0.0f);
-
-        GL.End();
-        GL.PopMatrix();
-
+        // Directly blit using HDR pipeline and let Unity handle the active RT
+        Graphics.Blit(source, destination, _raymarchMaterial);
     }
 
     private Matrix4x4 CamFrustum(Camera cam)
