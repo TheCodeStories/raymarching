@@ -12,16 +12,18 @@ public class CloudVolume : MonoBehaviour
     Material material;
 
     [Header("Raymarching Variables")]
-    [Range(0.001f, 0.1f)]
+    [Range(0.1f, 100.0f)]
     public float _stepSize;
 
-    [Range(0.001f, 0.1f)]
+    [Range(1.0f, 10.0f)]
     public float _shadowStepSize;
     public int   _maxIterations;
     [Range(0.001f, 0.1f)]
     public float _accuracy;
     [Range(0.0f, 1.0f)]
     public float _exponentialFactor;
+    public Texture2D _blueNoiseTexture;
+
 
     [Header("Light")]
     public Light _light;
@@ -42,6 +44,7 @@ public class CloudVolume : MonoBehaviour
         if (renderer != null)
         {
             var material = renderer.sharedMaterial;
+            material.SetTexture("_BlueNoiseTex", _blueNoiseTexture);
             material.SetVector("_BoundsMin", container.position - container.localScale / 2);
             material.SetVector("_BoundsMax", container.position + container.localScale / 2);
             material.SetFloat("_StepSize", _stepSize);

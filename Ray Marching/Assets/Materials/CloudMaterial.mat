@@ -23,6 +23,10 @@ Material:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - _BlueNoiseTex:
+        m_Texture: {fileID: 2800000, guid: b0df9c4abe70fa143b0203a5a0a31264, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _BumpMap:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -40,6 +44,10 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _EmissionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Global3DNoise:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
@@ -61,37 +69,37 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Accuracy: 0.01
+    - _Accuracy: 0.0357
     - _AnisotropyBackward: -0.31
-    - _AnisotropyForward: 0.9
+    - _AnisotropyForward: 0.6
     - _BumpScale: 1
     - _Cutoff: 0.5
-    - _Density: 0.89
+    - _Density: 3.38
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _ExponentialFactor: 1
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1
-    - _LightIntensity: 0.28
+    - _LightIntensity: 10
     - _LobeWeight: 1
-    - _MaxIterations: 1000
+    - _MaxIterations: 128
     - _Metallic: 0
     - _Mode: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.02
-    - _ShadowStepSize: 0.068
+    - _ShadowStepSize: 1
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
-    - _StepSize: 0.1
+    - _StepSize: 1
     - _UVSec: 0
     - _ZWrite: 1
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _LightColor: {r: 1, g: 1, b: 1, a: 1}
-    - _LightDirection: {r: -0.5799525, g: 0.45284283, b: 0.6771916, a: 0}
+    - _LightColor: {r: 1, g: 0.5584551, b: 0, a: 1}
+    - _LightDirection: {r: -0, g: -0.22673832, b: 0.97395587, a: 0}
     - _LightPosition: {r: 5.26, g: 0.38, b: -0.87, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

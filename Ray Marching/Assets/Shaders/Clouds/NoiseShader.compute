@@ -1,115 +1,92 @@
 #pragma kernel CSMain
 
-RWTexture2D<float4> Result;
+RWTexture3D<float4> Result;
 
 uniform float _Resolution;
 uniform float _Scale;
 uniform float _Boost;
 uniform int _Octaves;
-uniform float _TileSize;
+uniform int _TileSize;
 
-// uint hash2D(int2 p) {
-//     // A quick integer hash: based on SquirrelNoise
-//     uint h = (uint)(p.x * 374761393u + p.y * 668265263u); // large primes
-//     h = (h ^ (h >> 13u)) * 1274126177u;
-//     return h ^ (h >> 16u);
-// }
-
-// float2 perlinHash(float2 p)
-// {
-//     int2 ip = (int2)p;
-
-//     static const float2 gradients[8] = {
-//         float2(1,0), float2(-1,0), float2(0,1), float2(0,-1),
-//         normalize(float2(1,1)), normalize(float2(-1,1)),
-//         normalize(float2(1,-1)), normalize(float2(-1,-1))
-//     };
-
-//     uint idx = hash2D(ip) % 8;
-//     return gradients[idx];
-// }
-
-uint hash2D(int2 p) {
-    uint h = (uint)(p.x * 374761393u + p.y * 668265263u);
+uint hash3D(int3 p)
+{
+    uint h = (uint)(p.x * 374761393u + p.y * 668265263u + p.z * 3624371u);
     h = (h ^ (h >> 13u)) * 1274126177u;
     return h ^ (h >> 16u);
 }
 
-float2 perlinHash(float2 p)
+float3 perlinHash(float3 p, uint period)
 {
-    int2 ip = (int2)p;
-    uint h = hash2D(ip);
-
-    float rand = frac(h * 0.00000011920928955078125); 
-
-    float angle = rand * 6.2831853; 
-
-    return float2(cos(angle), sin(angle));
+    int3 ip = (int3)p % period;  // Wrap the lattice coordinates
+    ip = (ip + period) % period; // Ensure positive modulus
+    float rand = frac(hash3D(ip) * 0.00000011920928955078125); // 1/2^23
+    float theta = rand * 6.2831853;
+    float phi = acos(2.0 * frac(rand * 1.37) - 1.0);
+    return float3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi));
 }
 
-float2 fade(float2 t) {
+float3 fade(float3 t) {
     return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
-float perlinNoise(float2 uv){
-    float2 pa = floor(uv);
-    float2 pb = pa + float2(1, 0);
-    float2 pc = pa + float2(0, 1);
-    float2 pd = pa + float2(1, 1);
-    
-    float2 a = perlinHash(pa); 
-    float2 b = perlinHash(pb); 
-    float2 c = perlinHash(pc); 
-    float2 d = perlinHash(pd);
-    
-    float2 f = frac(uv);
-
-    float2 va = f - float2(0, 0); 
-    float2 vb = f - float2(1, 0); 
-    float2 vc = f - float2(0, 1); 
-    float2 vd = f - float2(1, 1); 
-
-    float da = dot(a, va);
-    float db = dot(b, vb);
-    float dc = dot(c, vc);
-    float dd = dot(d, vd);
-
-    float2 w = fade(f);
-
-    float x1 = lerp(da, db, w.x);
-    float x2 = lerp(dc, dd, w.x);
-    float result = lerp(x1, x2, w.y);
-
-    return result;
-}
-
-float fbm(float2 uv, int octaves, float lacunarity, float gain)
+float perlinNoise3D(float3 p, int period)
 {
-    float sum = 0.0;
-    float amplitude = 1.0;
-    float frequency = 1.0;
-    float totalAmplitude = 0.0;
+    float3 pi = floor(p);
+    float3 pf = frac(p);
 
-    for (int i = 0; i < octaves; ++i)
+    float3 gradients[8];
+    float dots[8];
+    for (int i = 0; i < 8; i++)
     {
-
-        sum += perlinNoise(uv * frequency) * amplitude;
-        totalAmplitude += amplitude;
-
-        frequency *= lacunarity; 
-        amplitude *= gain;       
+        int3 corner = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+        float3 g = perlinHash(pi + corner, period);
+        float3 d = pf - corner;
+        gradients[i] = g;
+        dots[i] = dot(g, d);
     }
 
-    return sum / totalAmplitude;
+    float3 f = fade(pf);
+
+    float x1 = lerp(dots[0], dots[1], f.x);
+    float x2 = lerp(dots[2], dots[3], f.x);
+    float x3 = lerp(dots[4], dots[5], f.x);
+    float x4 = lerp(dots[6], dots[7], f.x);
+
+    float y1 = lerp(x1, x2, f.y);
+    float y2 = lerp(x3, x4, f.y);
+
+    return lerp(y1, y2, f.z);
 }
-[numthreads(8,8,1)]
+
+float fbm3(float3 p, int octaves, float lacunarity, float gain, int basePeriod)
+{
+    float value = 0.0;
+    float amp = 1.0;
+    float freq = 1.0;
+    float totalAmp = 0.0;
+
+    for (int i = 0; i < octaves; i++)
+    {
+        int period = (int)(basePeriod * freq); // Scale period with freq
+        value += perlinNoise3D(p * freq, period) * amp;
+        totalAmp += amp;
+        freq *= lacunarity;
+        amp *= gain;
+    }
+
+    return value / totalAmp;
+}
+[numthreads(8,8,8)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-    float2 uv = (float2(id.xy) + 0.5) * _Scale;
+    float3 uv = (float3(id.xyz) + 0.5) / _Resolution;
+    uv *= _Scale;
 
-    float value = fbm(uv, _Octaves, 2.0, 0.5);
-    value = value * 0.5 + 0.5;
+    float value = fbm3(uv, _Octaves, 2.0, 0.5, _TileSize);
+    // value = value * 0.5 + 0.5; // shift to [0,1]
     value *= _Boost;
 
-    Result[id.xy] = float4(value, value, value, 1.0);
+    value = max(value, 0.0);
+
+    Result[id.xyz] = float4(value, value, value, 1.0);
 }

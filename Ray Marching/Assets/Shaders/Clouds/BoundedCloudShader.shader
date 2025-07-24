@@ -3,6 +3,11 @@ Shader "Unlit/BoundedCloudShader"
     Properties
     {
         _MainTex            ("Background (RGB)",    2D)    = "white" {}
+        _Global3DNoise      ("Noise",               3D)    = "white" {}
+        _BlueNoiseTex("Blue Noise Texture", 2D) = "white" {}
+
+
+
         _Density            ("Density",             Float) = 1.0
         _StepSize           ("Step Size",           Float) = 0.1
         _ShadowStepSize     ("Shadow Step Size",    Float) = 0.5
@@ -17,6 +22,8 @@ Shader "Unlit/BoundedCloudShader"
         _AnisotropyForward  ("HG Forward G",        Float) = 0.6
         _AnisotropyBackward ("HG Backward G",       Float) = -0.3
         _LobeWeight         ("HG Lobe Weight",      Float) = 0.75
+
+
     }
     SubShader
     {
@@ -38,7 +45,9 @@ Shader "Unlit/BoundedCloudShader"
 
         sampler2D _MainTex;
         sampler2D _CameraDepthTexture;
-        float4    _CameraDepthTexture_TexelSize;
+
+        sampler3D _Global3DNoise;
+        uniform sampler2D _BlueNoiseTex;
 
         float _Density;
         float _StepSize;
@@ -109,17 +118,13 @@ Shader "Unlit/BoundedCloudShader"
             return w*HG(g1,ct) + (1-w)*HG(g2,ct);
         }
 
-        // constant‐density for now
         float sampleDensity(float3 p)
         {
-            float3 np = p * 1.0; // Slightly higher frequency than 0.01 — experiment here
+            float3 uvw = (p - _BoundsMin.xyz) 
+                    / (_BoundsMax.xyz - _BoundsMin.xyz);
 
-            // Composite sin-based fake noise
-            float noise = sin(np.x * 1.3) + sin(np.y * 4.7) + sin(np.z * 2.2);
-            noise = noise * 0.33 + 0.5; // Normalize to approx [0,1]
-
-            // Blobby shape using smoothstep to soften threshold
-            noise = smoothstep(0.4, 0.7, noise); // Wider transition = rounder blobs
+            float noise = tex3Dlod(_Global3DNoise, float4(uvw, 0)).r;
+            // float noise = tex3D(_Global3DNoise, uvw).r;
 
             return _Density * noise;
         }
@@ -127,7 +132,7 @@ Shader "Unlit/BoundedCloudShader"
         float computeTransmittance(float3 position, float3 Ld)
         {
             float tau = 0;
-            int steps = 64;
+            int steps = 8;
             for (int i = 0; i < steps; i++) {
                 float3 sp = position - Ld * (i * _ShadowStepSize); // Cast against light direction
                 float d = sampleDensity(sp);
@@ -145,10 +150,22 @@ Shader "Unlit/BoundedCloudShader"
             return sphere;
         }
         // the raymarcher
-        fixed4 raymarching(float3 ro, float3 rd, out float hitT)
+        fixed4 raymarching(float3 ro, float3 rd, out float hitT, float2 uv)
         {
+
             float2 bi   = rayBoxDistance(_BoundsMin.xyz, _BoundsMax.xyz, ro, rd);
-            float  traveled = bi.x;
+            
+            if (bi.y <= 0) {
+                hitT = -1.0;
+                return fixed4(0,0,0,0);
+            }
+            // float2 noiseUV = frac(uv / 128.0); // 128 = blue noise texture size
+            float2 noiseUV = frac(uv * _ScreenParams.xy / 128.0); // Tile blue noise every 128px
+            float noise = tex2D(_BlueNoiseTex, noiseUV).r;
+            float traveled = bi.x + (noise - 0.5) * 2.0 * _StepSize;
+
+
+            // float  traveled = bi.x;
             float  maxTraveled = bi.x + bi.y;
 
             float3 col = 0;
@@ -156,6 +173,7 @@ Shader "Unlit/BoundedCloudShader"
             bool   hitCloud = false;
             float  cloudEntryT = -1.0;
 
+            // [loop]
             for(int i = 0; i < _MaxIterations && traveled < maxTraveled; i++)
             {
                 float3 position = ro + rd * traveled;
@@ -201,7 +219,7 @@ Shader "Unlit/BoundedCloudShader"
             float3 ro  = _WorldSpaceCameraPos;
 
             float hitT;
-            fixed4 vm = raymarching(ro, rd, hitT);
+            fixed4 vm = raymarching(ro, rd, hitT, i.uv);
 
             if (vm.a > 0 && hitT > 0.0)
             {
