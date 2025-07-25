@@ -29,33 +29,38 @@ public class SunlightColorController : MonoBehaviour
         if (directionalLight == null)
             directionalLight = GetComponent<Light>();
 
-        // Calculate sun position relative to "up" (Vector3.up)
-        Vector3 sunDirection = transform.forward; // In Unity, directional light shines along its forward
-        sunDot = Vector3.Dot(sunDirection, Vector3.down); 
-        // sunDot: +1 = noon (directly overhead), -1 = midnight (below horizon)
+        // Directional light shines along its forward
+        Vector3 sunDirection = transform.forward;
 
-        // Remap dot from [-1, 1] to [0, 1]
-        float t = Mathf.InverseLerp(-0.1f, 1f, sunDot);
+        // +1 = overhead, -1 = under horizon
+        sunDot = Vector3.Dot(sunDirection, Vector3.down);
+
+        // Map [-1,1] → [0,1]
+        float t = Mathf.InverseLerp(-1f, 1f, sunDot);
         t = Mathf.Clamp01(t);
 
-        // Evaluate color from gradient
+        // Evaluate gradient
         Color sunColor = sunColorGradient.Evaluate(t);
 
         directionalLight.color = sunColor;
+
+        // Optional: disable light completely at night (if you want no light at all)
+        directionalLight.enabled = sunColor.maxColorComponent > 0.01f;
     }
 
     private void SetupGradient()
     {
-        // If no gradient set, create a default one
         if (sunColorGradient == null || sunColorGradient.colorKeys.Length == 0)
         {
             sunColorGradient = new Gradient();
             sunColorGradient.SetKeys(
                 new GradientColorKey[]
                 {
-                    new GradientColorKey(new Color(0.8f, 0.3f, 0.1f), 0.0f), // Sunrise/Sunset: orange/red
-                    new GradientColorKey(new Color(1.0f, 0.95f, 0.8f), 0.5f), // Mid-elevation: warm white
-                    new GradientColorKey(new Color(1.0f, 1.0f, 1.0f), 1.0f)   // Noon: white
+                    new GradientColorKey(new Color(0f, 0f, 0f), 0.0f),         // Midnight: black
+                    new GradientColorKey(new Color(0.8f, 0.3f, 0.1f), 0.25f),  // Sunrise: orange/red
+                    new GradientColorKey(new Color(1f, 1f, 1f), 0.5f),         // Noon: white
+                    new GradientColorKey(new Color(0.8f, 0.3f, 0.1f), 0.75f),  // Sunset: orange/red
+                    new GradientColorKey(new Color(0f, 0f, 0f), 1.0f)          // Midnight again: black
                 },
                 new GradientAlphaKey[]
                 {

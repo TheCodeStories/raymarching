@@ -47,17 +47,33 @@ public class NoiseGenerator : MonoBehaviour
             texture = null;
         }
 
-        texture = new RenderTexture(size, size, 0)
+        // texture = new RenderTexture(size, size, 0)
+        // {
+        //     dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
+        //     volumeDepth = size,
+        //     enableRandomWrite = true,
+        //     wrapMode = TextureWrapMode.Repeat,
+        //     format = RenderTextureFormat.ARGBFloat
+        // };
+
+        texture = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat)
         {
             dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
             volumeDepth = size,
             enableRandomWrite = true,
+
+            // ←–– the key flags:
+            useMipMap = true,
+            autoGenerateMips = false,     // we’ll trigger it manually after dispatch
+            filterMode = FilterMode.Trilinear,
             wrapMode = TextureWrapMode.Repeat,
-            format = RenderTextureFormat.ARGBFloat
+            anisoLevel = 8
         };
         texture.Create();
 
         DispatchNoise();
+
+        texture.GenerateMips();
     }
 
     void DispatchNoise()

@@ -69,12 +69,13 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Accuracy: 0.0357
-    - _AnisotropyBackward: -0.31
+    - _Accuracy: 1
+    - _AnisotropyBackward: -0.5
     - _AnisotropyForward: 0.6
     - _BumpScale: 1
+    - _CloudBrightness: 1
     - _Cutoff: 0.5
-    - _Density: 3.38
+    - _Density: 3
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _ExponentialFactor: 1
@@ -82,24 +83,25 @@ Material:
     - _Glossiness: 0.5
     - _GlossyReflections: 1
     - _LightIntensity: 10
-    - _LobeWeight: 1
-    - _MaxIterations: 128
+    - _LobeWeight: 0.9
+    - _MaxIterations: 300
     - _Metallic: 0
     - _Mode: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.02
-    - _ShadowStepSize: 1
+    - _ShadowStepSize: 2
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _StepSize: 1
     - _UVSec: 0
+    - _WhiteBoost: 0.2
     - _ZWrite: 1
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _LightColor: {r: 1, g: 0.5584551, b: 0, a: 1}
-    - _LightDirection: {r: -0, g: -0.22673832, b: 0.97395587, a: 0}
+    - _LightColor: {r: 1, g: 0.72139823, b: 0.10736249, a: 1}
+    - _LightDirection: {r: -0, g: 0.045486398, b: 0.9989649, a: 0}
     - _LightPosition: {r: 5.26, g: 0.38, b: -0.87, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

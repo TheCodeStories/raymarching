@@ -22,6 +22,8 @@ Shader "Unlit/BoundedCloudShader"
         _AnisotropyForward  ("HG Forward G",        Float) = 0.6
         _AnisotropyBackward ("HG Backward G",       Float) = -0.3
         _LobeWeight         ("HG Lobe Weight",      Float) = 0.75
+        _CloudBrightness ("Cloud Brightness", Float) = 1.0
+        _WhiteBoost ("White Boost", Float) = 1.0
 
 
     }
@@ -31,14 +33,16 @@ Shader "Unlit/BoundedCloudShader"
         Cull Off
         ZWrite Off
         ZTest LEqual
-        Blend SrcAlpha OneMinusSrcAlpha
+        // Blend SrcAlpha OneMinusSrcAlpha
+        Blend One OneMinusSrcAlpha
+
 
         Pass
         {
         CGPROGRAM
         #pragma vertex vert
         #pragma fragment frag
-        #pragma target 3.0
+        #pragma target 4.0
 
         #include "UnityCG.cginc"
         #include "../DistanceFunctions.cginc"
@@ -47,6 +51,7 @@ Shader "Unlit/BoundedCloudShader"
         sampler2D _CameraDepthTexture;
 
         sampler3D _Global3DNoise;
+        uniform float _Global3DNoise_mipCount;
         uniform sampler2D _BlueNoiseTex;
 
         float _Density;
@@ -63,6 +68,9 @@ Shader "Unlit/BoundedCloudShader"
         float _AnisotropyForward;
         float _AnisotropyBackward;
         float _LobeWeight;
+        float _CloudBrightness;
+        float _WhiteBoost;
+
 
         float4 _BoundsMin;
         float4 _BoundsMax;
@@ -120,11 +128,24 @@ Shader "Unlit/BoundedCloudShader"
 
         float sampleDensity(float3 p)
         {
-            float3 uvw = (p - _BoundsMin.xyz) 
-                    / (_BoundsMax.xyz - _BoundsMin.xyz);
+            // float3 uvw = (p - _BoundsMin.xyz) 
+            //         / (_BoundsMax.xyz - _BoundsMin.xyz);
 
-            float noise = tex3Dlod(_Global3DNoise, float4(uvw, 0)).r;
+            // // float noise = tex3Dlod(_Global3DNoise, float4(uvw, 0)).r;
             // float noise = tex3D(_Global3DNoise, uvw).r;
+
+            float3 uvw = (p - _BoundsMin.xyz) / (_BoundsMax.xyz - _BoundsMin.xyz);
+
+            // compute approximate mip level
+            float3 ddx_uvw = ddx(uvw);
+            float3 ddy_uvw = ddy(uvw);
+            float lod = max(
+                0.5 * log2(dot(ddx_uvw, ddx_uvw)),
+                0.5 * log2(dot(ddy_uvw, ddy_uvw))
+            );
+
+            // sample mipmapped 3D noise
+            float noise = tex3Dlod(_Global3DNoise, float4(uvw, lod)).r;
 
             return _Density * noise;
         }
@@ -141,31 +162,21 @@ Shader "Unlit/BoundedCloudShader"
             float T = exp(-tau);
             return T;
         }
-
-        // your SDF: sphere + box smooth‐min
-        float4 sdf(float3 position)
-        {
-            float4 sphere = float4(1,0,0, sdSphere(position - (_BoundsMin.xyz+_BoundsMax.xyz)*0.5, 0.5));
-            // float4 box = float4(1,1,1, sdBox(position - (_BoundsMin.xyz+_BoundsMax.xyz)*0.5, float3(0.5,0.5,0.5)));
-            return sphere;
-        }
         // the raymarcher
-        fixed4 raymarching(float3 ro, float3 rd, out float hitT, float2 uv)
+        float4 raymarching(float3 ro, float3 rd, out float hitT, float2 uv)
         {
 
             float2 bi   = rayBoxDistance(_BoundsMin.xyz, _BoundsMax.xyz, ro, rd);
             
             if (bi.y <= 0) {
                 hitT = -1.0;
-                return fixed4(0,0,0,0);
+                return float4(0,0,0,0);
             }
-            // float2 noiseUV = frac(uv / 128.0); // 128 = blue noise texture size
-            float2 noiseUV = frac(uv * _ScreenParams.xy / 128.0); // Tile blue noise every 128px
-            float noise = tex2D(_BlueNoiseTex, noiseUV).r;
-            float traveled = bi.x + (noise - 0.5) * 2.0 * _StepSize;
+            float2 noiseUV = frac(uv * _ScreenParams.xy / 470.0); // Tile blue noise every 128px
+            float noise = tex2Dlod(_BlueNoiseTex, float4(noiseUV, 0, 0)).r ;
+            float stepOffset = (noise - 0.5) * _StepSize * _Accuracy;
+            float traveled = bi.x + stepOffset * 2.0;
 
-
-            // float  traveled = bi.x;
             float  maxTraveled = bi.x + bi.y;
 
             float3 col = 0;
@@ -173,7 +184,7 @@ Shader "Unlit/BoundedCloudShader"
             bool   hitCloud = false;
             float  cloudEntryT = -1.0;
 
-            // [loop]
+            [loop]
             for(int i = 0; i < _MaxIterations && traveled < maxTraveled; i++)
             {
                 float3 position = ro + rd * traveled;
@@ -194,8 +205,10 @@ Shader "Unlit/BoundedCloudShader"
                     float3 Vd = -rd;
                     float  cosT = dot(Ld, Vd);
                     float  phase = doubleLobedHG(cosT, _AnisotropyForward, _AnisotropyBackward, _LobeWeight);
-
-                    float scat = density * _StepSize;
+                    
+                    // float scat = density * _StepSize;
+                    float softenedDensity = pow(density, _CloudBrightness);
+                    float scat = softenedDensity * _StepSize;
                     col += transmittance * Tsh * _LightColor * _LightIntensity * phase * scat;
 
                     transmittance *= exp(-pow(density, _ExponentialFactor) * _StepSize);
@@ -206,10 +219,12 @@ Shader "Unlit/BoundedCloudShader"
             }
 
             hitT = hitCloud ? cloudEntryT : -1.0;
+            col = lerp(col, _LightColor.rgb, _WhiteBoost);
             return fixed4(col, 1.0 - transmittance);
+            // return fixed4(noise,noise,noise,1.0);
         }
 
-        fixed4 frag(v2f i) : SV_Target
+        float4 frag(v2f i) : SV_Target
         {
             fixed3 bg = tex2D(_MainTex, i.uv).rgb;
 
@@ -219,19 +234,22 @@ Shader "Unlit/BoundedCloudShader"
             float3 ro  = _WorldSpaceCameraPos;
 
             float hitT;
-            fixed4 vm = raymarching(ro, rd, hitT, i.uv);
+            float4 vm = raymarching(ro, rd, hitT, i.uv);
 
-            if (vm.a > 0 && hitT > 0.0)
-            {
-                float3 hitPos = ro + rd * hitT;
-                float4 cp     = UnityWorldToClipPos(hitPos);
-                float rayD    = Linear01Depth(cp.z / cp.w);
+            float3 outCol = vm.rgb * vm.a;  
+            return float4(outCol, vm.a);
 
-                if (rayD > sceneD)
-                    discard;
-            }
+            // if (vm.a > 0 && hitT > 0.0)
+            // {
+            //     float3 hitPos = ro + rd * hitT;
+            //     float4 cp     = UnityWorldToClipPos(hitPos);
+            //     float rayD    = Linear01Depth(cp.z / cp.w);
 
-            return fixed4(lerp(bg, vm.rgb, vm.a), vm.a);
+            //     if (rayD > sceneD)
+            //         discard;
+            // }
+
+            // return fixed4(lerp(bg, vm.rgb, vm.a), vm.a);
         }
         ENDCG
         }

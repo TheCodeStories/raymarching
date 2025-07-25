@@ -18,7 +18,6 @@ public class CloudVolume : MonoBehaviour
     [Range(1.0f, 10.0f)]
     public float _shadowStepSize;
     public int   _maxIterations;
-    [Range(0.001f, 0.1f)]
     public float _accuracy;
     [Range(0.0f, 1.0f)]
     public float _exponentialFactor;
@@ -36,6 +35,8 @@ public class CloudVolume : MonoBehaviour
     public float _anisotropyBackward;
     [Range(-1.0f, 1.0f)]
     public float _lobeWeight;
+    public float _cloudBrightness;
+    public float _whiteBoost;
 
     void Update() {
         Camera.main.depthTextureMode |= DepthTextureMode.Depth;
@@ -62,6 +63,8 @@ public class CloudVolume : MonoBehaviour
             material.SetFloat("_AnisotropyForward",_anisotropyForward);
             material.SetFloat("_AnisotropyBackward", _anisotropyBackward);
             material.SetFloat("_LobeWeight", _lobeWeight);
+            material.SetFloat("_CloudBrightness", _cloudBrightness);
+            material.SetFloat("_WhiteBoost", _whiteBoost);
         }
     }
 }
