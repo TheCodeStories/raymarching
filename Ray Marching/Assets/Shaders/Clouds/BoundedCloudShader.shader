@@ -75,6 +75,9 @@ Shader "Unlit/BoundedCloudShader"
         float4 _BoundsMin;
         float4 _BoundsMax;
 
+        uniform float _CloudSpeed;
+        uniform float3 _CloudDirection;
+
         struct appdata {
             float4 vertex : POSITION;
         };
@@ -126,17 +129,29 @@ Shader "Unlit/BoundedCloudShader"
             return w*HG(g1,ct) + (1-w)*HG(g2,ct);
         }
 
+        // float sampleDensity(float3 p)
+        // {
+        //     float3 uvw = (p - _BoundsMin.xyz) / (_BoundsMax.xyz - _BoundsMin.xyz);
+
+        //     float3 ddx_uvw = ddx(uvw);
+        //     float3 ddy_uvw = ddy(uvw);
+        //     float lod = max(
+        //         0.5 * log2(dot(ddx_uvw, ddx_uvw)),
+        //         0.5 * log2(dot(ddy_uvw, ddy_uvw))
+        //     );
+
+        //     float noise = tex3Dlod(_Global3DNoise, float4(uvw, lod)).r;
+
+        //     return _Density * noise;
+        // }
+
         float sampleDensity(float3 p)
         {
-            // float3 uvw = (p - _BoundsMin.xyz) 
-            //         / (_BoundsMax.xyz - _BoundsMin.xyz);
+            // Time-based offset for cloud movement
+            float3 animatedPos = p + _CloudDirection * (_Time.y * _CloudSpeed);
 
-            // // float noise = tex3Dlod(_Global3DNoise, float4(uvw, 0)).r;
-            // float noise = tex3D(_Global3DNoise, uvw).r;
+            float3 uvw = (animatedPos - _BoundsMin.xyz) / (_BoundsMax.xyz - _BoundsMin.xyz);
 
-            float3 uvw = (p - _BoundsMin.xyz) / (_BoundsMax.xyz - _BoundsMin.xyz);
-
-            // compute approximate mip level
             float3 ddx_uvw = ddx(uvw);
             float3 ddy_uvw = ddy(uvw);
             float lod = max(
@@ -144,9 +159,7 @@ Shader "Unlit/BoundedCloudShader"
                 0.5 * log2(dot(ddy_uvw, ddy_uvw))
             );
 
-            // sample mipmapped 3D noise
             float noise = tex3Dlod(_Global3DNoise, float4(uvw, lod)).r;
-
             return _Density * noise;
         }
 
@@ -163,26 +176,18 @@ Shader "Unlit/BoundedCloudShader"
             return T;
         }
         // the raymarcher
-        float4 raymarching(float3 ro, float3 rd, out float hitT, float2 uv)
+        float4 raymarching(float3 ro, float3 rd, float2 uv)
         {
-
             float2 bi   = rayBoxDistance(_BoundsMin.xyz, _BoundsMax.xyz, ro, rd);
-            
-            if (bi.y <= 0) {
-                hitT = -1.0;
-                return float4(0,0,0,0);
-            }
+
             float2 noiseUV = frac(uv * _ScreenParams.xy / 470.0); // Tile blue noise every 128px
             float noise = tex2Dlod(_BlueNoiseTex, float4(noiseUV, 0, 0)).r ;
             float stepOffset = (noise - 0.5) * _StepSize * _Accuracy;
             float traveled = bi.x + stepOffset * 2.0;
-
             float  maxTraveled = bi.x + bi.y;
 
             float3 col = 0;
             float  transmittance  = 1;
-            bool   hitCloud = false;
-            float  cloudEntryT = -1.0;
 
             [loop]
             for(int i = 0; i < _MaxIterations && traveled < maxTraveled; i++)
@@ -193,12 +198,6 @@ Shader "Unlit/BoundedCloudShader"
 
                 if (density > 0.01)
                 {
-                    if (!hitCloud)
-                    {
-                        hitCloud = true;
-                        cloudEntryT = traveled;
-                    }
-
                     float3 Ld  = normalize(-_LightDirection);
                     float  Tsh = computeTransmittance(position, Ld);
 
@@ -206,7 +205,6 @@ Shader "Unlit/BoundedCloudShader"
                     float  cosT = dot(Ld, Vd);
                     float  phase = doubleLobedHG(cosT, _AnisotropyForward, _AnisotropyBackward, _LobeWeight);
                     
-                    // float scat = density * _StepSize;
                     float softenedDensity = pow(density, _CloudBrightness);
                     float scat = softenedDensity * _StepSize;
                     col += transmittance * Tsh * _LightColor * _LightIntensity * phase * scat;
@@ -218,10 +216,8 @@ Shader "Unlit/BoundedCloudShader"
                 traveled += _StepSize;
             }
 
-            hitT = hitCloud ? cloudEntryT : -1.0;
             col = lerp(col, _LightColor.rgb, _WhiteBoost);
             return fixed4(col, 1.0 - transmittance);
-            // return fixed4(noise,noise,noise,1.0);
         }
 
         float4 frag(v2f i) : SV_Target
@@ -233,23 +229,11 @@ Shader "Unlit/BoundedCloudShader"
             float3 rd = normalize(i.viewVector);
             float3 ro  = _WorldSpaceCameraPos;
 
-            float hitT;
-            float4 vm = raymarching(ro, rd, hitT, i.uv);
+            float4 vm = raymarching(ro, rd, i.uv);
 
             float3 outCol = vm.rgb * vm.a;  
             return float4(outCol, vm.a);
 
-            // if (vm.a > 0 && hitT > 0.0)
-            // {
-            //     float3 hitPos = ro + rd * hitT;
-            //     float4 cp     = UnityWorldToClipPos(hitPos);
-            //     float rayD    = Linear01Depth(cp.z / cp.w);
-
-            //     if (rayD > sceneD)
-            //         discard;
-            // }
-
-            // return fixed4(lerp(bg, vm.rgb, vm.a), vm.a);
         }
         ENDCG
         }

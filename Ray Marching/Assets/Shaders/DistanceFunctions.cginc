@@ -90,6 +90,22 @@ float sdOctahedron( float3 p, float s )
 
 //     return min( max(d2.x,d2.y), 0.0 ) + length( max(d2, 0.0) );
 // }
+float sdUniformHollowCylinder(float3 p, float3 cylinder)
+{
+    float r1 = cylinder.x; // inner radius
+    float r2 = cylinder.y; // outer radius
+    float h  = cylinder.z; // total height
+
+    float radialDist = length(p.xz);
+
+    float distOuter = radialDist - r2;
+    float distInner = r1 - radialDist;
+    float distY = abs(p.y) - h * 0.5;
+
+    float2 d2 = float2(max(distOuter, distInner), distY);
+    return min(max(d2.x, d2.y), 0.0) + length(max(d2, 0.0));
+}
+
 float sdHollowCylinder(float3 p, float3 cylinder)
 {
     float r1 = cylinder.x; // inner radius

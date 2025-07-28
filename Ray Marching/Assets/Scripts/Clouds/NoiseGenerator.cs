@@ -12,7 +12,7 @@ public class NoiseGenerator : MonoBehaviour
     [Range(1, 10)] public int _octaves;
     [Range(1, 32)] public int _tileSize;
 
-    [Range(0, 1)] public float _slice = 0f; // Which Z slice to preview
+    [Range(0, 1)] public float _slice = 0f;
     public bool _debugPreview = false;
 
     [Range(1, 8)] public float _debugSize;
@@ -47,24 +47,14 @@ public class NoiseGenerator : MonoBehaviour
             texture = null;
         }
 
-        // texture = new RenderTexture(size, size, 0)
-        // {
-        //     dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
-        //     volumeDepth = size,
-        //     enableRandomWrite = true,
-        //     wrapMode = TextureWrapMode.Repeat,
-        //     format = RenderTextureFormat.ARGBFloat
-        // };
-
         texture = new RenderTexture(size, size, 0, RenderTextureFormat.RFloat)
         {
             dimension = UnityEngine.Rendering.TextureDimension.Tex3D,
             volumeDepth = size,
             enableRandomWrite = true,
 
-            // ←–– the key flags:
             useMipMap = true,
-            autoGenerateMips = false,     // we’ll trigger it manually after dispatch
+            autoGenerateMips = false,
             filterMode = FilterMode.Trilinear,
             wrapMode = TextureWrapMode.Repeat,
             anisoLevel = 8
@@ -105,11 +95,9 @@ public class NoiseGenerator : MonoBehaviour
         float sliceIndex = Mathf.Clamp01(_slice) * (size - 1);
         int intSlice = Mathf.RoundToInt(sliceIndex);
 
-        // Blit that slice to a temporary 2D RenderTexture:
         RenderTexture temp = RenderTexture.GetTemporary(size, size, 0, RenderTextureFormat.ARGBFloat);
         Graphics.CopyTexture(texture, intSlice, 0, temp, 0, 0);
 
-        // Draw it on screen:
         GUI.DrawTexture(new Rect(10, 10, 256 * _debugSize, 256 * _debugSize), temp, ScaleMode.ScaleToFit, false);
 
         RenderTexture.ReleaseTemporary(temp);

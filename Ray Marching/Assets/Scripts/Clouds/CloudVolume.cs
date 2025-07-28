@@ -37,6 +37,8 @@ public class CloudVolume : MonoBehaviour
     public float _lobeWeight;
     public float _cloudBrightness;
     public float _whiteBoost;
+    public float _cloudSpeed;
+    public Vector3 _cloudDirection;
 
     void Update() {
         Camera.main.depthTextureMode |= DepthTextureMode.Depth;
@@ -65,6 +67,8 @@ public class CloudVolume : MonoBehaviour
             material.SetFloat("_LobeWeight", _lobeWeight);
             material.SetFloat("_CloudBrightness", _cloudBrightness);
             material.SetFloat("_WhiteBoost", _whiteBoost);
+            material.SetFloat("_CloudSpeed", _cloudSpeed);
+            material.SetVector("_CloudDirection", _cloudDirection);
         }
     }
 }
