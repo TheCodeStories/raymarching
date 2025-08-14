@@ -45,7 +45,7 @@ Shader "Unlit/BoundedCloudShader"
         #pragma target 4.0
 
         #include "UnityCG.cginc"
-        #include "../DistanceFunctions.cginc"
+        #include "../Utils.cginc"
 
         sampler2D _MainTex;
         sampler2D _CameraDepthTexture;
@@ -70,7 +70,6 @@ Shader "Unlit/BoundedCloudShader"
         float _LobeWeight;
         float _CloudBrightness;
         float _WhiteBoost;
-
 
         float4 _BoundsMin;
         float4 _BoundsMax;
@@ -100,54 +99,8 @@ Shader "Unlit/BoundedCloudShader"
             return o;
         }
 
-        // --- box intersection ---
-        float2 rayBoxDistance(float3 bmin, float3 bmax, float3 ro, float3 rd)
-        {
-            float3 inv = 1.0/rd;
-            float3 t0  = (bmin - ro)*inv;
-            float3 t1  = (bmax - ro)*inv;
-            float3 tmin= min(t0,t1);
-            float3 tmax= max(t0,t1);
-
-            float entry = max(max(tmin.x,tmin.y), tmin.z);
-            float exit  = min(min(tmax.x,tmax.y), tmax.z);
-
-            bool inside = all(ro > bmin) && all(ro < bmax);
-            if (inside) entry = 0;
-            float distIn = max(0, exit-entry);
-            return float2(max(0,entry), distIn);
-        }
-
-        // --- phase functions ---
-        float HG(float g, float ct)
-        {
-            float d = 1 + g*g - 2*g*ct;
-            return (1 - g*g)/(4*UNITY_PI*pow(d,1.5));
-        }
-        float doubleLobedHG(float ct, float g1, float g2, float w)
-        {
-            return w*HG(g1,ct) + (1-w)*HG(g2,ct);
-        }
-
-        // float sampleDensity(float3 p)
-        // {
-        //     float3 uvw = (p - _BoundsMin.xyz) / (_BoundsMax.xyz - _BoundsMin.xyz);
-
-        //     float3 ddx_uvw = ddx(uvw);
-        //     float3 ddy_uvw = ddy(uvw);
-        //     float lod = max(
-        //         0.5 * log2(dot(ddx_uvw, ddx_uvw)),
-        //         0.5 * log2(dot(ddy_uvw, ddy_uvw))
-        //     );
-
-        //     float noise = tex3Dlod(_Global3DNoise, float4(uvw, lod)).r;
-
-        //     return _Density * noise;
-        // }
-
         float sampleDensity(float3 p)
         {
-            // Time-based offset for cloud movement
             float3 animatedPos = p + _CloudDirection * (_Time.y * _CloudSpeed);
 
             float3 uvw = (animatedPos - _BoundsMin.xyz) / (_BoundsMax.xyz - _BoundsMin.xyz);
@@ -168,19 +121,19 @@ Shader "Unlit/BoundedCloudShader"
             float tau = 0;
             int steps = 8;
             for (int i = 0; i < steps; i++) {
-                float3 sp = position - Ld * (i * _ShadowStepSize); // Cast against light direction
+                float3 sp = position - Ld * (i * _ShadowStepSize);
                 float d = sampleDensity(sp);
                 tau += pow(d, _ExponentialFactor) * _ShadowStepSize;
             }
             float T = exp(-tau);
             return T;
         }
-        // the raymarcher
+
         float4 raymarching(float3 ro, float3 rd, float2 uv)
         {
             float2 bi   = rayBoxDistance(_BoundsMin.xyz, _BoundsMax.xyz, ro, rd);
 
-            float2 noiseUV = frac(uv * _ScreenParams.xy / 470.0); // Tile blue noise every 128px
+            float2 noiseUV = frac(uv * _ScreenParams.xy / 470.0); 
             float noise = tex2Dlod(_BlueNoiseTex, float4(noiseUV, 0, 0)).r ;
             float stepOffset = (noise - 0.5) * _StepSize * _Accuracy;
             float traveled = bi.x + stepOffset * 2.0;

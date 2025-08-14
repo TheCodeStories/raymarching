@@ -44,14 +44,25 @@ public class RaymarchCamera : MonoBehaviour
     public int _maxIterations;
     [Range(0.001f, 0.1f)]
     public float _accuracy;
-    public float _smoothFactor;
-    public float _blendFactor;
 
     [Header("Objects")]
     public Vector4 _sphere;
     public Color _sphereColor;
-    public Vector4 _box;
+    
+    public Vector4 _sphere2;
+    public Color _sphere2Color;
+    public Vector3 _box;
+    public Vector3 _boxBounds;
+
     public Color _boxColor;
+    public Vector3 _box2;
+    public Vector3 _box2Bounds;
+
+    public Color _box2Color;
+    public Vector3 _box3;
+    public Vector3 _box3Bounds;
+
+    public Color _box3Color;
     public float _ground;
     public Color _groundColor;
 
@@ -62,9 +73,10 @@ public class RaymarchCamera : MonoBehaviour
     public Vector2 _shadowDistance;
     public float _shadowIntensity;
     public float _shadowPenumbra;
-    public float _aoStepSize;
-    public int _aoIterations;
-    public int _aoIntensity;
+
+    public int _colorEnabled;
+    public int _shadowEnabled;
+    public int _backgroundEnabled;
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
@@ -83,17 +95,35 @@ public class RaymarchCamera : MonoBehaviour
 
         _raymarchMaterial.SetVector("_Sphere", _sphere);
         _raymarchMaterial.SetColor("_SphereColor", _sphereColor);
+
+        _raymarchMaterial.SetVector("_Sphere2", _sphere2);
+        _raymarchMaterial.SetColor("_Sphere2Color", _sphere2Color);
+
         _raymarchMaterial.SetVector("_Box", _box);
+        _raymarchMaterial.SetVector("_BoxBounds", _boxBounds);
         _raymarchMaterial.SetColor("_BoxColor", _boxColor);
+
+        _raymarchMaterial.SetVector("_Box2", _box2);
+        _raymarchMaterial.SetVector("_Box2Bounds", _box2Bounds);
+        _raymarchMaterial.SetColor("_Box2Color", _box2Color);
+
+        _raymarchMaterial.SetVector("_Box3", _box3);
+        _raymarchMaterial.SetVector("_Box3Bounds", _box3Bounds);
+        _raymarchMaterial.SetColor("_Box3Color", _box3Color);
+
         _raymarchMaterial.SetFloat("_Ground", _ground);
         _raymarchMaterial.SetColor("_GroundColor", _groundColor);
-        _raymarchMaterial.SetFloat("_SmoothFactor", _smoothFactor);
-        _raymarchMaterial.SetFloat("_BlendFactor", _blendFactor);
         _raymarchMaterial.SetColor("_LightColor", _lightColor);
         _raymarchMaterial.SetFloat("_LightIntensity", _lightIntensity);
         _raymarchMaterial.SetVector("_ShadowDistance", _shadowDistance);
         _raymarchMaterial.SetFloat("_ShadowIntensity", _shadowIntensity);
         _raymarchMaterial.SetFloat("_ShadowPenumbra", _shadowPenumbra);
+
+        _raymarchMaterial.SetInt("_ColorEnabled", _colorEnabled);
+        _raymarchMaterial.SetInt("_ShadowEnabled", _shadowEnabled);
+        _raymarchMaterial.SetInt("_BackgroundEnabled", _backgroundEnabled);
+
+
 
 
 

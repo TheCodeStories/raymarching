@@ -91,7 +91,6 @@ public class NoiseGenerator : MonoBehaviour
     {
         if (!_debugPreview || texture == null) return;
 
-        // Draw the 3D texture as a 2D slice:
         float sliceIndex = Mathf.Clamp01(_slice) * (size - 1);
         int intSlice = Mathf.RoundToInt(sliceIndex);
 

@@ -56,7 +56,6 @@ public class CloudVolume : MonoBehaviour
             material.SetFloat("_Accuracy", _accuracy);
             material.SetFloat("_ExponentialFactor", _exponentialFactor);
 
-            // material.SetVector("_LightPosition", _light.transform.position);
             material.SetVector("_LightDirection", -_light.transform.forward);
             material.SetColor("_LightColor", _light.color);
             material.SetFloat("_LightIntensity", _light.intensity);

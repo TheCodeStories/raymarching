@@ -6,7 +6,6 @@ Shader "Hidden/RaymarchShader"
     }
     SubShader
     {
-        // No culling or depth
         Cull Off ZWrite Off ZTest Always
 
         Pass
@@ -17,31 +16,40 @@ Shader "Hidden/RaymarchShader"
             #pragma target 3.0
 
             #include "UnityCG.cginc"
-            #include "DistanceFunctions.cginc"
+            #include "Utils.cginc"
 
             sampler2D _MainTex;
             uniform sampler2D _CameraDepthTexture;
             uniform float4x4 _CamFrustum, _CamToWorld;
+
+            uniform int _MaxIterations;
             uniform float _MaxDistance;
+            uniform float _Accuracy;
+
             uniform float4 _Sphere;
             uniform float4 _SphereColor;
-            uniform float4 _Box;
+            uniform float4 _Sphere2;
+            uniform float4 _Sphere2Color;
+            uniform float3 _Box;
+            uniform float3 _BoxBounds;
             uniform float4 _BoxColor;
-            uniform float _Ground;
-            uniform float3 _GroundColor;
-            uniform float _SmoothFactor;
-            uniform float _BlendFactor;
+            uniform float3 _Box2;
+            uniform float3 _Box2Bounds;
+            uniform float4 _Box2Color;
+            uniform float3 _Box3;
+            uniform float3 _Box3Bounds;
+            uniform float4 _Box3Color;
+
             uniform float3 _LightDirection;
             uniform float3 _LightColor;
             uniform float _LightIntensity;
             uniform float _ShadowIntensity;
             uniform float _ShadowPenumbra;
             uniform float2 _ShadowDistance;
-            uniform int _MaxIterations;
-            uniform float _Accuracy;
-            uniform float _AoStepSize;
-            uniform int _AoIterations;
-            uniform float _AoIntensity;
+
+            uniform int _ColorEnabled;
+            uniform int _ShadowEnabled;
+            uniform int _BackgroundEnabled;
 
             struct appdata
             {
@@ -78,11 +86,19 @@ Shader "Hidden/RaymarchShader"
                 return length(position) - radius;
             }
 
-            
-            float sDBox(float3 position, float b)
+            float sdBoxRot(float3 position, float3 bounds, float angleY)
             {
-                float3 q = abs(position) - b;
-                return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+                angleY = radians(-angleY);
+                float c = cos(-angleY); 
+                float s = sin(-angleY);
+
+                float3 rotatedPos;
+                rotatedPos.x = c * position.x - s * position.z;
+                rotatedPos.y = position.y;
+                rotatedPos.z = s * position.x + c * position.z;
+
+                float3 q = abs(rotatedPos) - bounds;
+                return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
             }
             
             float4 opUS(float4 d1, float4 d2, float k){
@@ -95,8 +111,29 @@ Shader "Hidden/RaymarchShader"
             float4 sdf(float3 position)
             {
                 float4 sphere = float4(_SphereColor.rgb, sDSphere(position - _Sphere.xyz, _Sphere.w));
+                float4 sphere2 = float4(_Sphere2Color.rgb, sDSphere(position - _Sphere2.xyz, _Sphere2.w));
 
-                return sphere;
+                float4 box1 = float4(_BoxColor.rgb, sdBox(position - _Box.xyz, _BoxBounds));
+                float4 box2 = float4(_Box2Color.rgb, sdBoxRot(position - _Box2.xyz, _Box2Bounds, 200.0));
+                float4 box3 = float4(_Box3Color.rgb, sdBox(position - _Box3.xyz, _Box3Bounds));
+
+                return smoothMin(
+                    smoothMin(
+                        smoothMin(
+                            smoothMin(
+                                sphere,
+                                sphere2,
+                                0.0
+                            ),
+                            box1,
+                            0.0
+                        ),
+                        box2,
+                        0.0
+                    ),
+                    box3,
+                    0.0
+                );
             }
 
             float3 getNormal(float3 position){
@@ -112,30 +149,14 @@ Shader "Hidden/RaymarchShader"
             float softShadow(float3 ro, float3 rd, float minTraveled, float maxTraveled, float k){
                 float result = 1.0;
                 for(float traveled = minTraveled; traveled < maxTraveled;){
-                    float h = sdf(ro + rd * traveled).w; // FIXED: Get distance
+                    float h = sdf(ro + rd * traveled).w; 
                     if(h < 0.001){
                         return 0.0;
                     }
                     result = min(result, k * h/traveled);
-                    traveled += h; // Also missing!
+                    traveled += h; 
                 }
                 return clamp(result, 0.0, 1.0);
-            }
-
-            float ambientOclusion(float3 position, float3 normal)
-            {
-                float ao = 0.0;
-                float3 origin = position + normal * 0.01;
-
-                for (int i = 1; i <= _AoIterations; i++)
-                {
-                    float distance = _AoStepSize * i;
-                    float distToScene = sdf(origin + normal * distance).w;
-                    ao += max(0.0, distance - distToScene) / distance;
-                }
-
-                ao /= _AoIterations;
-                return pow(saturate(1.0 - ao), 1.5) * _AoIntensity;
             }
 
             float3 shading(float3 position, float3 normal, float3 color){
@@ -151,7 +172,6 @@ Shader "Hidden/RaymarchShader"
                 ) * 0.5 + 0.5;
                 shadow = max(0.0, pow(shadow, _ShadowIntensity));
 
-                float ao = ambientOclusion(position, normal);
 
                 result = color * light * shadow;
 
@@ -160,33 +180,51 @@ Shader "Hidden/RaymarchShader"
             }
 
             fixed4 raymarching(float3 origin, float3 direction, float depth){
-                fixed4 result = fixed4(0.0,0.0,0.0,1);
+                fixed4 result = fixed4(0.01, 0.01, 0.01,1);
+                if(_BackgroundEnabled){
+                    result = fixed4(0.01, 0.01, 0.01,0);
+                }
                 const int maxSteps = _MaxIterations;
                 float traveled = 0;
 
+                
+                float glowStrength = 2.0;  
+                float glowWidth = 0.5; 
+
                 int i;
                 for(i = 0; i < maxSteps; i++){
-                    if(traveled > _MaxDistance || traveled >= depth){ 
-                        return fixed4(direction, 0);
+                    if(traveled > _MaxDistance){ 
+                        return result;
                         break;
                     }
                     
 
                     float3 position = origin + direction * traveled;
                     float4 distance = sdf(position);
+                    if(!_ColorEnabled){
+                        distance.rgb = float3(0.01, 0.01, 0.01);
+                    }
 
-                    if(distance.w < _Accuracy){ //We hit something
+                    if(distance.w < _Accuracy){ 
                         float3 normal = getNormal(position);
 
                         float3 s = shading(position, normal, distance.rgb);
+
+                        if(!_ShadowEnabled){
+                            s = 1;
+                        }
 
                         result = fixed4(distance.rgb * s, 1);
                         break;
                     }
 
+                    if(!_ColorEnabled){
+                        float glow = exp(-distance.w / glowWidth) * glowStrength;
+                        result.rgb += distance.rgb * glow;
+                    }
+                    
                     traveled += distance.w;
                 }
-                
                 return result;
             }
 
@@ -199,7 +237,9 @@ Shader "Hidden/RaymarchShader"
                 float3 rayOrigin = _WorldSpaceCameraPos;
                 fixed4 result = raymarching(rayOrigin, rayDirection, depth);
                 
+                
                 return fixed4(color * (1.0 - result.w) + result.rgb * result.w,1.0);
+                // return result;
             }
             ENDCG
         }

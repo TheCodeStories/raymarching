@@ -17,9 +17,9 @@ uint hash3D(int3 p)
 
 float3 perlinHash(float3 p, uint period)
 {
-    int3 ip = (int3)p % period;  // Wrap the lattice coordinates
-    ip = (ip + period) % period; // Ensure positive modulus
-    float rand = frac(hash3D(ip) * 0.00000011920928955078125); // 1/2^23
+    int3 ip = (int3)p % period;  
+    ip = (ip + period) % period;
+    float rand = frac(hash3D(ip) * 0.00000011920928955078125);
     float theta = rand * 6.2831853;
     float phi = acos(2.0 * frac(rand * 1.37) - 1.0);
     return float3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi));
@@ -67,7 +67,7 @@ float fbm3(float3 p, int octaves, float lacunarity, float gain, int basePeriod)
 
     for (int i = 0; i < octaves; i++)
     {
-        int period = (int)(basePeriod * freq); // Scale period with freq
+        int period = (int)(basePeriod * freq);
         value += perlinNoise3D(p * freq, period) * amp;
         totalAmp += amp;
         freq *= lacunarity;
@@ -83,7 +83,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     uv *= _Scale;
 
     float value = fbm3(uv, _Octaves, 2.0, 0.5, _TileSize);
-    // value = value * 0.5 + 0.5; // shift to [0,1]
+
     value *= _Boost;
 
     value = max(value, 0.0);

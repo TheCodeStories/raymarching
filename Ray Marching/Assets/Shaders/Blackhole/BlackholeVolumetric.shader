@@ -24,7 +24,7 @@ Shader "Unlit/BlackholeVolumetric"
         #pragma target 3.0
 
         #include "UnityCG.cginc"
-        #include "../DistanceFunctions.cginc"
+        #include "../Utils.cginc"
 
         sampler2D _MainTex;
         samplerCUBE _CubeMap;
@@ -37,6 +37,7 @@ Shader "Unlit/BlackholeVolumetric"
 
         float _StepSize;
         int   _MaxIterations;
+        uniform float _ShadowStepSize;
         int   _MaxShadowIterations;
         float _Accuracy;
         uniform float _NoiseStrength;
@@ -44,34 +45,29 @@ Shader "Unlit/BlackholeVolumetric"
         uniform float4 _Sphere;
         uniform float4 _SphereColor;
 
-        //Black Hole parameters
         uniform float _BlackHoleMass;
         uniform float3 _Cylinder;
         uniform float3 _CylinderColor;
         
-        //Dust parameters
         uniform float _Density;
-        uniform float _ShadowStepSize;
         uniform float _ExponentialFactor;
         uniform float _AnisotropyForward;
         uniform float _AnisotropyBackward;
         uniform float _LobeWeight;
         uniform float _CloudBrightness;
-        uniform float _WhiteBoost;
-        uniform float3 _LightColor;
         uniform float  _LightIntensity;
         uniform float _RotationSpeed;
+        uniform float _BaseRotationSpeed;
         uniform float _InitialRotation;
-
-        uniform float _Factor;
         uniform float _VerticalFadeStart;
         uniform float _VerticalFadeEnd;
         uniform float _OuterFadeStart; 
         uniform float _OuterFadeEnd;
         uniform float _InnerFadeRadius; 
         uniform float _InnerFadeWidth;
-
         uniform float _LightFalloff;
+        uniform float _DopplerStrength;
+
 
         struct appdata {
             float4 vertex : POSITION;
@@ -95,40 +91,14 @@ Shader "Unlit/BlackholeVolumetric"
             return o;
         }
 
-        // --- box intersection ---
-        float2 rayBoxDistance(float3 bmin, float3 bmax, float3 ro, float3 rd)
-        {
-            float3 inv = 1.0/rd;
-            float3 t0  = (bmin - ro)*inv;
-            float3 t1  = (bmax - ro)*inv;
-            float3 tmin= min(t0,t1);
-            float3 tmax= max(t0,t1);
-
-            float entry = max(max(tmin.x,tmin.y), tmin.z);
-            float exit  = min(min(tmax.x,tmax.y), tmax.z);
-
-            bool inside = all(ro > bmin) && all(ro < bmax);
-            if (inside) entry = 0;
-            float distIn = max(0, exit-entry);
-            return float2(max(0,entry), distIn);
-        }
-
+        //Signed distance field
         float4 sdf(float3 position)
         {
             float4 cylinder = float4(_CylinderColor, sdUniformHollowCylinder(position - _Sphere.xyz, _Cylinder));
             return cylinder;
         }
 
-        float HG(float g, float ct)
-        {
-            float d = 1 + g*g - 2*g*ct;
-            return (1 - g*g)/(4*UNITY_PI*pow(d,1.5));
-        }
-        float doubleLobedHG(float ct, float g1, float g2, float w)
-        {
-            return w*HG(g1,ct) + (1-w)*HG(g2,ct);
-        }
-
+        //Disk density sampling
         float sampleDensity(float3 position)
         {
             float3 local = position - _Sphere.xyz;
@@ -137,7 +107,7 @@ Shader "Unlit/BlackholeVolumetric"
             float r = length(xz) + 0.001;
             float theta = atan2(xz.y, xz.x);
 
-            float orbitalSpeed = _RotationSpeed / pow(r, 1.5);
+            float orbitalSpeed = _RotationSpeed / pow(r, 1.5) + _BaseRotationSpeed;
             float startRotation = _InitialRotation / pow(r, 1.5);
             float angleOffset = startRotation + theta + orbitalSpeed * _Time.y;
 
@@ -146,38 +116,33 @@ Shader "Unlit/BlackholeVolumetric"
                 (local.y + _Cylinder.z * 0.5) / _Cylinder.z
             );
 
-            // Convert polar coords back to normalized [0,1] UVW with swirl
             float u = cos(angleOffset) * polar.x * 0.5 + 0.5;
             float w = sin(angleOffset) * polar.x * 0.5 + 0.5;
-
             float3 diskUVW = float3(u, polar.y, w);
 
-            // Sample noise
-            float mip = 0;
-            float noise = tex3D(_Global3DNoise, float4(diskUVW, mip)).r;
+            float noise = tex3D(_Global3DNoise, float4(diskUVW, 0)).r;
 
-            float yNorm = abs(local.y) / (_Cylinder.z * 0.5);
-            float verticalFade = 1.0 - smoothstep(_VerticalFadeStart, _VerticalFadeEnd, yNorm); // or use exp falloff
-            
-            // float r = length(float2(local.x, local.z));
-            float normalizedR = r / _Cylinder.x; // 0 = center, 1 = outer edge
+            float radiusNorm = r / _Cylinder.x;
+            float thicknessAtR = _Cylinder.z * (1.0 + sqrt(radiusNorm) * 0.5);
 
-            // Inner fade (near black hole)
+            float yNorm = abs(local.y) / thicknessAtR;
+            float verticalFade = 1.0 - smoothstep(_VerticalFadeStart, _VerticalFadeEnd, yNorm);
+
+
+
             float innerFade = smoothstep(
                 _InnerFadeRadius, 
                 _InnerFadeRadius + _InnerFadeWidth, 
-                normalizedR
+                radiusNorm
             );
-            // Outer fade (toward outer edge)
-            float outerFade = 1.0 - smoothstep(_OuterFadeStart, _OuterFadeEnd, normalizedR);
 
-            // Final radial fade is a blend of both
+            float outerFade = 1.0 - smoothstep(_OuterFadeStart, _OuterFadeEnd, radiusNorm);
             float radialFade = innerFade * outerFade;
 
-            return noise * _Density * verticalFade * radialFade;
+            float mainDensity = noise * _Density * verticalFade * radialFade;
+
+            return mainDensity;
         }
-
-
 
         float computeTransmittance(float3 position, float3 Ld)
         {
@@ -185,13 +150,15 @@ Shader "Unlit/BlackholeVolumetric"
             int steps = _MaxShadowIterations;
             [loop]
             for (int i = 0; i < steps; i++) {
-                float3 sp = position - Ld * (i * _ShadowStepSize); // Cast against light direction
+                float3 sp = position - Ld * (i * _ShadowStepSize);
                 float d = sampleDensity(sp);
                 tau += pow(d, _ExponentialFactor) * _ShadowStepSize;
             }
             float T = exp(-tau);
             return T;
         }
+
+        //Main function
         float4 raymarching(float3 origin, float3 direction, float2 uv)
         {
             float2 bi   = rayBoxDistance(_BoundsMin.xyz, _BoundsMax.xyz, origin, direction);
@@ -216,7 +183,7 @@ Shader "Unlit/BlackholeVolumetric"
             [loop]
             for (int i = 0; i < _MaxIterations ; i++) {
                 float4 distance = sdf(position + (direction * stepOffset));
-                float bdist = length(position);
+                float bdist = length(position - _Sphere.xyz);
 
                 if(bdist < _Sphere.w && distance.w > maxTraveled) break;
                 
@@ -237,26 +204,34 @@ Shader "Unlit/BlackholeVolumetric"
                         float  r    = length(position - _Sphere.xyz);
 
 
+
                         float  dist2 = dot(_Sphere.xyz - position, _Sphere.xyz - position);
-                        float  atten = _LightIntensity / (max(dist2, 0.001) * 0.06);
-
-                        // float d = max(r - (_Cylinder.x - 10), 0.01); // start falloff *outside* disk radius
-                        // float atten = _LightIntensity / pow(d, _LightFalloff) * 0.1;
-
+                        float  atten = _LightIntensity  / (max(dist2, 0.001) * 0.06);
 
                         float  tRad = saturate((r - _Cylinder.x) / (_Cylinder.y - _Cylinder));
                         float3 hotColor  = float3(2.0, 2.0, 2.0);
-                        float3 sampleColor = hotColor * (1-tRad) + (float3(3, 6, 12) * 2);
+                        float3 sampleColor = hotColor * (1-tRad) + (float3(3, 6, 12) * 2); // Blue
                         
-                        
-                        // float3 sampleColor = hotColor * (1-tRad) + (float3(10, 5, 3) * 2);
-                        // float3 hotColor = float3(3.0, 3.0, 3.0); // white-hot center
-                        // float3 coolerColor = float3(1.0, 2.0, 4.0); // cooler blue
-                        // float3 sampleColor = lerp(hotColor, coolerColor, tRad); // temperature gradient
-                        // sampleColor *= atten; // apply falloff
-                        
+
                         float saturation = pow(1.0 - tRad, _LightFalloff);
                         sampleColor *= saturation;
+
+                        float3 local = position - _Sphere.xyz;
+
+                        float3 toCam = normalize(_WorldSpaceCameraPos - position);
+
+                        float3 tangentDir = normalize(float3(-local.z, 0, local.x)); 
+
+                        float v = _RotationSpeed / pow(r, 1.5); 
+
+                        float3 vel = tangentDir * v;
+
+                        float relVel = -dot(normalize(vel), toCam);
+
+                        float dopplerBoost = 1.0 + _DopplerStrength * relVel; 
+                        dopplerBoost = max(dopplerBoost, 0.0);
+
+                        sampleColor *= dopplerBoost;
 
                         cloudCol.rgb += transmittance
                                     * Tsh
@@ -271,14 +246,18 @@ Shader "Unlit/BlackholeVolumetric"
                     }
                 }
 
-                direction = normalize(direction - (position * _StepSize / pow(bdist, 3) * _BlackHoleMass));
+                float3 toBH   = position - _Sphere.xyz;
+                float   dist  = length(toBH);
+                float3 gravity = toBH * (_StepSize / pow(dist, 3) * _BlackHoleMass);
+
+                direction = normalize(direction - gravity);
                 position += direction * stepSize;
             }
             if (length(position) < _Sphere.w)
                 baseCol = _SphereColor * transmittance;
             
-            // else
-            //     baseCol =  texCUBE(_CubeMap, direction).rgb * transmittance * 0.1;
+            else
+                baseCol =  texCUBE(_CubeMap, direction).rgb * transmittance * 0.1;
 
             return float4(baseCol + cloudCol, 1.0);
         }
