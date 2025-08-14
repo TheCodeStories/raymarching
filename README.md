@@ -1,4 +1,4 @@
-<img width="3663" height="2059" alt="image" src="https://github.com/user-attachments/assets/d2dffe51-0210-4e14-9673-f03ffaadd52f" /># Black Hole Rendering in Unity
+# Black Hole Rendering in Unity
 
 This project is a **Unity Engine** project focused on rendering realistic black holes using raymarching and volumetric techniques.
 
